@@ -108,7 +108,7 @@ export default function StudentAssignmentsPage() {
   const getFileUrl = (fileUrl: string) => {
     if (!fileUrl) return '#'
     if (fileUrl.startsWith('http')) return fileUrl
-    const fileName = fileUrl.split('/').pop().split('?')[0]
+    const fileName = fileUrl.split('/').pop()?.split('?')[0] || ''
     const { data } = supabase.storage.from('assignments').getPublicUrl(fileName)
     return data.publicUrl
   }
@@ -141,9 +141,9 @@ export default function StudentAssignmentsPage() {
             <div className="divide-y divide-gray-100">
               {assignments.map((item) => {
                 const finalUrl = getFileUrl(item.file_url)
-                const fileName = item.file_url ? item.file_url.split('/').pop().split('?')[0] : ''
+                const fileName = item.file_url ? (item.file_url.split('/').pop()?.split('?')[0] || '') : ''
                 const subFileUrl = item.submission?.file_url ? getFileUrl(item.submission.file_url) : null
-                const subFileName = item.submission?.file_url ? item.submission.file_url.split('/').pop().split('?')[0] : ''
+                const subFileName = item.submission?.file_url ? (item.submission.file_url.split('/').pop()?.split('?')[0] || '') : ''
 
                 return (
                   <div key={item.id} className="p-6 space-y-4">
@@ -258,7 +258,7 @@ export default function StudentAssignmentsPage() {
                             <span className="font-semibold text-gray-700">Tệp đính kèm bài làm: </span>
                             <a
                               href={subFileUrl}
-                              target="_blank"
+                            target="_blank"
                               rel="noopener noreferrer"
                               className="text-blue-600 hover:underline font-medium inline-flex items-center space-x-1 ml-1"
                             >
