@@ -28,7 +28,8 @@ export default function AdminAssignmentsPage() {
   }, [])
 
   const fetchClasses = async () => {
-    const { data } = await supabase.from('classes').select('*').order('name', { ascending: true })
+    // Đã sửa 'name' thành 'class_name' cho khớp với cấu trúc bảng classes trên Supabase
+    const { data } = await supabase.from('classes').select('*').order('class_name', { ascending: true })
     if (data) setClassesList(data)
   }
 
@@ -205,8 +206,9 @@ export default function AdminAssignmentsPage() {
                 >
                   <option value="">-- Tất cả các lớp --</option>
                   {classesList.map((cls) => (
-                    <option key={cls.id} value={cls.name}>
-                      {cls.name} {cls.subject ? `(${cls.subject})` : ''}
+                    // Đã sửa cls.name thành cls.class_name để khớp dữ liệu hiển thị
+                    <option key={cls.id} value={cls.class_name}>
+                      {cls.class_name} {cls.subject ? `(${cls.subject})` : ''}
                     </option>
                   ))}
                 </select>
