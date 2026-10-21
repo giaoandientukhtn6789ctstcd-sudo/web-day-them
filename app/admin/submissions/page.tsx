@@ -37,7 +37,7 @@ export default function AdminSubmissionsPage() {
   const getFileUrl = (fileUrl: string) => {
     if (!fileUrl) return '#'
     if (fileUrl.startsWith('http')) return fileUrl
-    const fileName = fileUrl.split('/').pop().split('?')[0]
+    const fileName = fileUrl.split('/').pop()?.split('?')[0] || ''
     const { data } = supabase.storage.from('assignments').getPublicUrl(fileName)
     return data.publicUrl
   }
@@ -70,7 +70,7 @@ export default function AdminSubmissionsPage() {
             <div className="divide-y divide-gray-100">
               {submissions.map((sub) => {
                 const subFileUrl = sub.file_url ? getFileUrl(sub.file_url) : null
-                const subFileName = sub.file_url ? sub.file_url.split('/').pop().split('?')[0] : ''
+                const subFileName = sub.file_url ? (sub.file_url.split('/').pop()?.split('?')[0] || '') : ''
 
                 return (
                   <div key={sub.id} className="p-6 space-y-3 hover:bg-gray-50 transition">
