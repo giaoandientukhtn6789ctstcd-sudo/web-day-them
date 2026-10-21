@@ -27,8 +27,8 @@ export default function AdminDashboard() {
     router.push('/login')
   }
 
-  const isAssistant = adminUser?.role === 'assistant'
-  const canManageStudents = isAssistant ? adminUser?.permissions?.canManageStudents : true
+  // Xác định tài khoản có phải là ADMIN chính (ID là 'ADMIN') hay không
+  const isMainAdmin = adminUser?.id === 'ADMIN'
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -59,63 +59,76 @@ export default function AdminDashboard() {
         <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-8 rounded-2xl text-white shadow-md space-y-2">
           <h2 className="text-2xl font-bold">Bảng điều khiển Quản trị hệ thống</h2>
           <p className="text-sm text-indigo-100">
-            {isAssistant 
-              ? 'Chào trợ giảng! Bạn có thể quản lý lớp học, điểm danh, giao bài tập và chấm bài nộp của học sinh.' 
-              : 'Quản lý tài khoản, lớp học, điểm danh, giao bài tập, cấu hình năm học mới và theo dõi bài nộp tại đây.'}
+            {isMainAdmin 
+              ? 'Quản lý toàn diện tài khoản, lớp học, điểm danh, bài tập và cấu hình năm học mới tại đây.' 
+              : 'Chào bạn! Bạn có quyền quản lý điểm danh, giao bài tập, chấm bài và dặn dò học sinh.'}
           </p>
         </div>
 
         {/* Grid các chức năng quản trị */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Quản lý Lớp học & TKB */}
-          <div
-            onClick={() => window.location.href = '/admin/classes'}
-            className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition cursor-pointer space-y-4 group"
-          >
-            <div className="flex items-center justify-between">
-              <div className="h-10 w-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition">
-                <Calendar className="h-5 w-5" />
-              </div>
-              <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">Lớp học</span>
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-gray-900">Quản lý Lớp học & TKB</h3>
-              <p className="text-xs text-gray-500 mt-1">Tạo lớp theo khối/môn, cấu hình thời khóa biểu và thêm học sinh vào lớp.</p>
-            </div>
-          </div>
-
-          {/* Quản lý tài khoản */}
+          
+          {/* 1. Quản lý Lớp học & TKB (BỊ KHÓA VỚI TRỢ GIẢNG VÀ ADMIN PHỤ) */}
           <div
             onClick={() => {
-              if (!canManageStudents) {
-                alert('Tài khoản Trợ giảng của bạn không được phân quyền Quản lý tài khoản!')
+              if (!isMainAdmin) {
+                alert('Tính năng Quản lý Lớp học & TKB chỉ dành riêng cho Admin chính!')
                 return
               }
-              window.location.href = '/admin/students'
+              router.push('/admin/classes')
             }}
             className={`bg-white p-6 rounded-2xl shadow-sm border transition cursor-pointer space-y-4 group ${
-              !canManageStudents ? 'opacity-60 bg-gray-50 border-gray-200' : 'border-gray-100 hover:shadow-md'
+              !isMainAdmin ? 'opacity-60 bg-gray-50 border-gray-200' : 'border-gray-100 hover:shadow-md'
             }`}
           >
             <div className="flex items-center justify-between">
-              <div className={`h-10 w-10 rounded-xl flex items-center justify-center transition ${!canManageStudents ? 'bg-gray-200 text-gray-500' : 'bg-blue-50 text-blue-600 group-hover:scale-110'}`}>
-                {canManageStudents ? <Users className="h-5 w-5" /> : <Lock className="h-5 w-5" />}
+              <div className={`h-10 w-10 rounded-xl flex items-center justify-center transition ${!isMainAdmin ? 'bg-gray-200 text-gray-500' : 'bg-indigo-50 text-indigo-600 group-hover:scale-110'}`}>
+                {!isMainAdmin ? <Lock className="h-5 w-5" /> : <Calendar className="h-5 w-5" />}
               </div>
-              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${!canManageStudents ? 'bg-gray-200 text-gray-600' : 'text-blue-600 bg-blue-50'}`}>
-                {canManageStudents ? 'Quản lý' : 'Đã khóa'}
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${!isMainAdmin ? 'bg-gray-200 text-gray-600' : 'text-indigo-600 bg-indigo-50'}`}>
+                {!isMainAdmin ? 'Đã khóa' : 'Lớp học'}
+              </span>
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">Quản lý Lớp học & TKB</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                {!isMainAdmin ? 'Đã khóa đối với trợ giảng và admin phụ.' : 'Tạo lớp theo khối/môn, cấu hình thời khóa biểu và thêm học sinh vào lớp.'}
+              </p>
+            </div>
+          </div>
+
+          {/* 2. Quản lý tài khoản (BỊ KHÓA VỚI TRỢ GIẢNG VÀ ADMIN PHỤ) */}
+          <div
+            onClick={() => {
+              if (!isMainAdmin) {
+                alert('Tính năng Quản lý Tài khoản chỉ dành riêng cho Admin chính!')
+                return
+              }
+              router.push('/admin/students')
+            }}
+            className={`bg-white p-6 rounded-2xl shadow-sm border transition cursor-pointer space-y-4 group ${
+              !isMainAdmin ? 'opacity-60 bg-gray-50 border-gray-200' : 'border-gray-100 hover:shadow-md'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className={`h-10 w-10 rounded-xl flex items-center justify-center transition ${!isMainAdmin ? 'bg-gray-200 text-gray-500' : 'bg-blue-50 text-blue-600 group-hover:scale-110'}`}>
+                {!isMainAdmin ? <Lock className="h-5 w-5" /> : <Users className="h-5 w-5" />}
+              </div>
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${!isMainAdmin ? 'bg-gray-200 text-gray-600' : 'text-blue-600 bg-blue-50'}`}>
+                {!isMainAdmin ? 'Đã khóa' : 'Quản lý'}
               </span>
             </div>
             <div>
               <h3 className="text-lg font-bold text-gray-900">Quản lý Tài khoản</h3>
               <p className="text-xs text-gray-500 mt-1">
-                {canManageStudents ? 'Thêm, sửa, xóa tài khoản Học sinh, Trợ giảng, ADMIN và đổi mật khẩu.' : 'Tính năng này đã bị khóa đối với tài khoản trợ giảng của bạn.'}
+                {!isMainAdmin ? 'Đã khóa đối với trợ giảng và admin phụ.' : 'Thêm, sửa, xóa tài khoản Học sinh, Trợ giảng, ADMIN và đổi mật khẩu.'}
               </p>
             </div>
           </div>
 
           {/* Giao bài tập */}
           <div
-            onClick={() => window.location.href = '/admin/assignments'}
+            onClick={() => router.push('/admin/assignments')}
             className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition cursor-pointer space-y-4 group"
           >
             <div className="flex items-center justify-between">
@@ -132,7 +145,7 @@ export default function AdminDashboard() {
 
           {/* Quản lý bài nộp */}
           <div
-            onClick={() => window.location.href = '/admin/submissions'}
+            onClick={() => router.push('/admin/submissions')}
             className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition cursor-pointer space-y-4 group"
           >
             <div className="flex items-center justify-between">
@@ -149,7 +162,7 @@ export default function AdminDashboard() {
 
           {/* Điểm danh */}
           <div
-            onClick={() => window.location.href = '/admin/attendance'}
+            onClick={() => router.push('/admin/attendance')}
             className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition cursor-pointer space-y-4 group"
           >
             <div className="flex items-center justify-between">
@@ -166,7 +179,7 @@ export default function AdminDashboard() {
 
           {/* Gửi Dặn dò Học sinh */}
           <div
-            onClick={() => window.location.href = '/admin/notifications'}
+            onClick={() => router.push('/admin/notifications')}
             className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition cursor-pointer space-y-4 group"
           >
             <div className="flex items-center justify-between">
@@ -183,7 +196,7 @@ export default function AdminDashboard() {
 
           {/* Bảng xếp hạng */}
           <div
-            onClick={() => window.location.href = '/dashboard/leaderboard'}
+            onClick={() => router.push('/dashboard/leaderboard')}
             className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition cursor-pointer space-y-4 group"
           >
             <div className="flex items-center justify-between">
@@ -198,31 +211,31 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Cấu hình hệ thống */}
+          {/* 3. Cấu hình hệ thống (BỊ KHÓA VỚI TRỢ GIẢNG VÀ ADMIN PHỤ) */}
           <div
             onClick={() => {
-              if (isAssistant) {
-                alert('Tính năng Cấu hình hệ thống & Năm học mới chỉ dành riêng cho quyền ADMIN!')
+              if (!isMainAdmin) {
+                alert('Tính năng Cấu hình & Năm học mới chỉ dành riêng cho Admin chính!')
                 return
               }
-              window.location.href = '/admin/settings'
+              router.push('/admin/settings')
             }}
             className={`bg-white p-6 rounded-2xl shadow-sm border transition cursor-pointer space-y-4 group ${
-              isAssistant ? 'opacity-60 bg-gray-50 border-gray-200' : 'border-gray-100 hover:shadow-md'
+              !isMainAdmin ? 'opacity-60 bg-gray-50 border-gray-200' : 'border-gray-100 hover:shadow-md'
             }`}
           >
             <div className="flex items-center justify-between">
-              <div className={`h-10 w-10 rounded-xl flex items-center justify-center transition ${isAssistant ? 'bg-gray-200 text-gray-500' : 'bg-red-50 text-red-600 group-hover:scale-110'}`}>
-                {isAssistant ? <Lock className="h-5 w-5" /> : <Settings className="h-5 w-5" />}
+              <div className={`h-10 w-10 rounded-xl flex items-center justify-center transition ${!isMainAdmin ? 'bg-gray-200 text-gray-500' : 'bg-red-50 text-red-600 group-hover:scale-110'}`}>
+                {!isMainAdmin ? <Lock className="h-5 w-5" /> : <Settings className="h-5 w-5" />}
               </div>
-              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${isAssistant ? 'bg-gray-200 text-gray-600' : 'text-red-600 bg-red-50'}`}>
-                {isAssistant ? 'Chỉ Admin' : 'Cài đặt'}
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${!isMainAdmin ? 'bg-gray-200 text-gray-600' : 'text-red-600 bg-red-50'}`}>
+                {!isMainAdmin ? 'Đã khóa' : 'Cài đặt'}
               </span>
             </div>
             <div>
               <h3 className="text-lg font-bold text-gray-900">Cấu hình & Năm học mới</h3>
               <p className="text-xs text-gray-500 mt-1">
-                {isAssistant ? 'Đã khóa đối với trợ giảng. Chỉ tài khoản ADMIN mới được phép truy cập.' : 'Bật/tắt công khai bảng xếp hạng và làm sạch dữ liệu năm học mới.'}
+                {!isMainAdmin ? 'Đã khóa đối với trợ giảng và admin phụ.' : 'Bật/tắt công khai bảng xếp hạng và làm sạch dữ liệu năm học mới.'}
               </p>
             </div>
           </div>
