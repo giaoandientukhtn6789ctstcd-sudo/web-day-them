@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
-import { ArrowLeft, BookOpen, Send, CheckCircle, ExternalLink, Download, FileUp } from 'lucide-react'
+import { ArrowLeft, BookOpen, Send, CheckCircle, ExternalLink, Download, FileUp, AlertCircle, Award, RefreshCw } from 'lucide-react'
 
 export default function StudentAssignmentsPage() {
   const [assignments, setAssignments] = useState<any[]>([])
@@ -83,15 +83,35 @@ export default function StudentAssignmentsPage() {
       fileUrl = publicUrlData.publicUrl
     }
 
-    const { error } = await supabase.from('submissions').insert([
-      {
-        assignment_id: assignmentId,
-        student_id: user.id,
-        content: answerText.trim() || 'Nộp bài đính kèm tệp',
-        file_url: fileUrl,
-        status: 'submitted',
-      },
-    ])
+    // Kiểm tra xem đã có bài nộp trước đó chưa (để hỗ trợ nộp lại / ghi đè hoặc cập nhật mới)
+    const existingSub = assignments.find(a => a.id === assignmentId)?.submission
+
+    let error = null
+    if (existingSub) {
+      // Cập nhật lại bài nộp cũ (reset đánh giá về trống để giáo viên chấm lại)
+      const { error: updateError } = await supabase
+        .from('submissions')
+        .update({
+          content: answerText.trim() || 'Nộp bài đính kèm tệp',
+          file_url: fileUrl || existingSub.file_url,
+          evaluation: null, // Reset đánh giá khi học sinh nộp lại
+          created_at: new Date().toISOString()
+        })
+        .eq('id', existingSub.id)
+      error = updateError
+    } else {
+      // Thêm mới bài nộp
+      const { error: insertError } = await supabase.from('submissions').insert([
+        {
+          assignment_id: assignmentId,
+          student_id: user.id,
+          content: answerText.trim() || 'Nộp bài đính kèm tệp',
+          file_url: fileUrl,
+          status: 'submitted',
+        },
+      ])
+      error = insertError
+    }
 
     setSubmitting(false)
 
@@ -144,12 +164,18 @@ export default function StudentAssignmentsPage() {
                 const fileName = item.file_url ? (item.file_url.split('/').pop()?.split('?')[0] || '') : ''
                 const subFileUrl = item.submission?.file_url ? getFileUrl(item.submission.file_url) : null
                 const subFileName = item.submission?.file_url ? (item.submission.file_url.split('/').pop()?.split('?')[0] || '') : ''
+                const evaluation = item.submission?.evaluation
 
                 return (
                   <div key={item.id} className="p-6 space-y-4">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
                       <div className="space-y-2">
-                        <h3 className="text-lg font-bold text-gray-900">{item.title}</h3>
+                        <div className="flex items-center space-x-2">
+                          <h3 className="text-lg font-bold text-gray-900">{item.title}</h3>
+                          <span className="text-xs px-2.5 py-0.5 bg-indigo-50 text-indigo-700 rounded-full font-semibold">
+                            {item.class_name || 'Tất cả các lớp'}
+                          </span>
+                        </div>
                         <p className="text-sm text-gray-600">{item.description || 'Không có mô tả chi tiết.'}</p>
                         
                         {item.file_url && (
@@ -195,70 +221,33 @@ export default function StudentAssignmentsPage() {
                       </div>
                     </div>
 
-                    {!item.submission && (
-                      <div className="mt-4 pt-4 border-t border-gray-100">
-                        {submittingId === item.id ? (
-                          <div className="space-y-3">
-                            <textarea
-                              value={answerText}
-                              onChange={(e) => setAnswerText(e.target.value)}
-                              placeholder="Nhập nội dung câu trả lời cho bài làm..."
-                              rows={3}
-                              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-800 text-sm"
-                            />
-                            <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-1">Đính kèm ảnh / tài liệu bài làm</label>
-                              <input
-                                type="file"
-                                accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-                                onChange={(e) => setAnswerFile(e.target.files ? e.target.files[0] : null)}
-                                className="w-full text-xs text-gray-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-                              />
-                            </div>
-                            <div className="flex justify-end space-x-2 pt-2">
-                              <button
-                                onClick={() => setSubmittingId(null)}
-                                className="px-3 py-1.5 border rounded-lg text-gray-600 hover:bg-gray-50 text-sm font-medium"
-                              >
-                                Hủy
-                              </button>
-                              <button
-                                onClick={() => handleSubmitAssignment(item.id)}
-                                disabled={submitting}
-                                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition flex items-center space-x-1"
-                              >
-                                <Send className="h-3.5 w-3.5" />
-                                <span>{submitting ? 'Đang gửi...' : 'Gửi bài nộp'}</span>
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              setSubmittingId(item.id)
-                              setAnswerText('')
-                              setAnswerFile(null)
-                            }}
-                            className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-sm font-medium transition"
-                          >
-                            Nộp bài tập này
-                          </button>
-                        )}
-                      </div>
-                    )}
-
+                    {/* Hiển thị bài đã nộp và đánh giá của giáo viên */}
                     {item.submission && (
-                      <div className="mt-2 p-4 bg-gray-50 rounded-lg space-y-2 text-xs text-gray-600">
-                        <div>
-                          <span className="font-semibold text-gray-700">Nội dung bài làm: </span>
-                          {item.submission.content}
+                      <div className="mt-2 p-4 bg-gray-50 rounded-lg space-y-3 text-xs text-gray-600 border border-gray-200">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+                          <div>
+                            <span className="font-semibold text-gray-700">Nội dung bài làm của bạn: </span>
+                            {item.submission.content}
+                          </div>
+                          {evaluation && (
+                            <div className="flex items-center space-x-1 px-3 py-1 rounded-lg font-bold text-xs shadow-sm"
+                              style={{
+                                backgroundColor: evaluation === 'TỐT' ? '#dcfce7' : evaluation === 'KHÁ' ? '#dbeafe' : evaluation === 'ĐẠT' ? '#fef3c7' : '#fee2e2',
+                                color: evaluation === 'TỐT' ? '#166534' : evaluation === 'KHÁ' ? '#1e40af' : evaluation === 'ĐẠT' ? '#92400e' : '#991b1b'
+                              }}
+                            >
+                              <Award className="h-4 w-4" />
+                              <span>Đánh giá: {evaluation}</span>
+                            </div>
+                          )}
                         </div>
+
                         {subFileUrl && (
                           <div>
                             <span className="font-semibold text-gray-700">Tệp đính kèm bài làm: </span>
                             <a
                               href={subFileUrl}
-                            target="_blank"
+                              target="_blank"
                               rel="noopener noreferrer"
                               className="text-blue-600 hover:underline font-medium inline-flex items-center space-x-1 ml-1"
                             >
@@ -267,8 +256,84 @@ export default function StudentAssignmentsPage() {
                             </a>
                           </div>
                         )}
+
+                        {evaluation === 'CHƯA ĐẠT' && (
+                          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 font-semibold flex items-center space-x-2">
+                            Bài làm bị đánh giá <b>CHƯA ĐẠT</b>. Vui lòng bấm <b>Nộp lại bài</b> bên dưới để hoàn thiện lại bài tập!
+                          </div>
+                        )}
                       </div>
                     )}
+
+                    {/* Form nộp bài hoặc nộp lại */}
+                    <div className="mt-4 pt-4 border-t border-gray-100">
+                      {submittingId === item.id ? (
+                        <div className="space-y-3 bg-blue-50 p-4 rounded-xl border border-blue-100">
+                          <h4 className="font-bold text-blue-900 text-sm">
+                            {item.submission ? 'Nộp lại bài tập mới' : 'Nộp bài tập'}
+                          </h4>
+                          <textarea
+                            value={answerText}
+                            onChange={(e) => setAnswerText(e.target.value)}
+                            placeholder="Nhập nội dung câu trả lời cho bài làm..."
+                            rows={3}
+                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-800 text-sm bg-white"
+                          />
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Đính kèm ảnh / tài liệu bài làm</label>
+                            <input
+                              type="file"
+                              accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                              onChange={(e) => setAnswerFile(e.target.files ? e.target.files[0] : null)}
+                              className="w-full text-xs text-gray-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
+                            />
+                          </div>
+                          <div className="flex justify-end space-x-2 pt-2">
+                            <button
+                              onClick={() => setSubmittingId(null)}
+                              className="px-3 py-1.5 border rounded-lg text-gray-600 hover:bg-gray-100 text-sm font-medium bg-white"
+                            >
+                              Hủy
+                            </button>
+                            <button
+                              onClick={() => handleSubmitAssignment(item.id)}
+                              disabled={submitting}
+                              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition flex items-center space-x-1 shadow"
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                              <span>{submitting ? 'Đang gửi...' : 'Xác nhận gửi bài'}</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setSubmittingId(item.id)
+                            setAnswerText(item.submission?.content || '')
+                            setAnswerFile(null)
+                          }}
+                          className={`px-4 py-2 rounded-lg text-sm font-medium transition inline-flex items-center space-x-1.5 ${
+                            item.submission?.evaluation === 'CHƯA ĐẠT'
+                              ? 'bg-red-600 hover:bg-red-700 text-white shadow'
+                              : item.submission
+                              ? 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                              : 'bg-blue-600 hover:bg-blue-700 text-white shadow'
+                          }`}
+                        >
+                          {item.submission ? (
+                            <>
+                              <RefreshCw className="h-4 w-4" />
+                              <span>Nộp lại bài tập</span>
+                            </>
+                          ) : (
+                            <>
+                              <Send className="h-4 w-4" />
+                              <span>Nộp bài tập này</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )
               })}

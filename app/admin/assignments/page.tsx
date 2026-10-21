@@ -7,12 +7,14 @@ import { ArrowLeft, Plus, BookOpen, Calendar, FileUp, Trash2 } from 'lucide-reac
 
 export default function AdminAssignmentsPage() {
   const [assignments, setAssignments] = useState<any[]>([])
+  const [classesList, setClassesList] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   // Form states
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [selectedClass, setSelectedClass] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -22,7 +24,13 @@ export default function AdminAssignmentsPage() {
 
   useEffect(() => {
     fetchAssignments()
+    fetchClasses()
   }, [])
+
+  const fetchClasses = async () => {
+    const { data } = await supabase.from('classes').select('*').order('name', { ascending: true })
+    if (data) setClassesList(data)
+  }
 
   const fetchAssignments = async () => {
     setLoading(true)
@@ -68,6 +76,7 @@ export default function AdminAssignmentsPage() {
       {
         title: title.trim(),
         description: description.trim(),
+        class_name: selectedClass || 'Tất cả các lớp',
         due_date: dueDate || null,
         file_url: fileUrl || (file ? file.name : null),
       },
@@ -80,6 +89,7 @@ export default function AdminAssignmentsPage() {
     } else {
       setTitle('')
       setDescription('')
+      setSelectedClass('')
       setDueDate('')
       setFile(null)
       setIsModalOpen(false)
@@ -129,7 +139,12 @@ export default function AdminAssignmentsPage() {
               {assignments.map((item) => (
                 <div key={item.id} className="p-6 flex justify-between items-start hover:bg-gray-50 transition">
                   <div className="space-y-1">
-                    <h3 className="text-lg font-bold text-gray-900">{item.title}</h3>
+                    <div className="flex items-center space-x-2">
+                      <h3 className="text-lg font-bold text-gray-900">{item.title}</h3>
+                      <span className="text-xs px-2.5 py-0.5 bg-indigo-50 text-indigo-700 rounded-full font-semibold">
+                        {item.class_name || 'Tất cả các lớp'}
+                      </span>
+                    </div>
                     <p className="text-sm text-gray-600">{item.description || 'Không có mô tả chi tiết.'}</p>
                     
                     {item.file_url && (
@@ -181,6 +196,22 @@ export default function AdminAssignmentsPage() {
             <h2 className="text-xl font-bold text-gray-900">Tạo bài tập mới kèm tài liệu</h2>
             
             <form onSubmit={handleCreateAssignment} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Chọn lớp học</label>
+                <select
+                  value={selectedClass}
+                  onChange={(e) => setSelectedClass(e.target.value)}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm text-gray-800 bg-white"
+                >
+                  <option value="">-- Tất cả các lớp --</option>
+                  {classesList.map((cls) => (
+                    <option key={cls.id} value={cls.name}>
+                      {cls.name} {cls.subject ? `(${cls.subject})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tiêu đề bài tập</label>
                 <input
