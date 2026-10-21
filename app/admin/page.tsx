@@ -27,8 +27,8 @@ export default function AdminDashboard() {
     router.push('/login')
   }
 
-  // Xác định tài khoản có phải là ADMIN chính (ID là 'ADMIN') hay không
-  const isMainAdmin = adminUser?.id === 'ADMIN'
+  // Kiểm tra không phân biệt chữ hoa/thường cho ADMIN chính (hỗ trợ cả id và student_code)
+  const isMainAdmin = adminUser?.id?.toUpperCase() === 'ADMIN' || adminUser?.student_code?.toUpperCase() === 'ADMIN'
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">

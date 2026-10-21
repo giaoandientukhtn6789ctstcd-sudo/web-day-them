@@ -24,7 +24,26 @@ export default function LoginPage() {
     setLoading(true)
     setErrorMsg('')
 
-    // Truy vấn kiểm tra thông tin tài khoản
+    // 1. Kiểm tra tài khoản ADMIN chính trước tiên
+    if (studentCode.trim().toUpperCase() === 'ADMIN') {
+      setLoading(false)
+      if (password === 'luuvanglien0410') {
+        const adminUser = {
+          id: 'ADMIN',
+          student_code: 'ADMIN',
+          full_name: 'Quản trị viên hệ thống',
+          role: 'admin'
+        }
+        localStorage.setItem('currentUser', JSON.stringify(adminUser))
+        router.push('/admin')
+        return
+      } else {
+        setErrorMsg('Mật khẩu tài khoản ADMIN chính không chính xác!')
+        return
+      }
+    }
+
+    // 2. Truy vấn kiểm tra các tài khoản khác (Trợ giảng, học sinh, admin phụ) từ Supabase
     const { data, error } = await supabase
       .from('users')
       .select('*')
@@ -45,7 +64,7 @@ export default function LoginPage() {
 
     const user = data[0]
 
-    // Kiểm tra mật khẩu (mặc định là 123456 nếu chưa đổi)
+    // Kiểm tra mật khẩu
     const dbPassword = user.password || '123456'
     if (password !== dbPassword) {
       setErrorMsg('Mật khẩu không chính xác!')
@@ -89,7 +108,7 @@ export default function LoginPage() {
               type="text"
               value={studentCode}
               onChange={(e) => setStudentCode(e.target.value)}
-              placeholder="Nhập mã (Ví dụ: ADMIN01 hoặc HS001)..."
+              placeholder="Nhập mã (Ví dụ: ADMIN hoặc HS001)..."
               required
               className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-800 text-sm transition"
             />
@@ -120,7 +139,7 @@ export default function LoginPage() {
         </form>
 
         <div className="text-center text-xs text-gray-400 pt-2 border-t border-gray-100">
-          Mật khẩu mặc định: <span className="font-semibold text-gray-600"></span>
+          Admin chính: <span className="font-semibold text-gray-600">ID: ADMIN / Mật khẩu đã cấu hình</span>
         </div>
       </div>
     </div>
