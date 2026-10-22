@@ -68,7 +68,7 @@ export default function AdminDashboard() {
         {/* Grid các chức năng quản trị */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           
-          {/* 1. Quản lý Lớp học & TKB (BỊ KHÓA VỚI TRỢ GIẢNG VÀ ADMIN PHỤ) */}
+          {/* 1. Quản lý Lớp học & TKB */}
           <div
             onClick={() => {
               if (!isMainAdmin) {
@@ -97,7 +97,24 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* 2. Quản lý tài khoản (BỊ KHÓA VỚI TRỢ GIẢNG VÀ ADMIN PHỤ) */}
+          {/* 1.1 Xem Thời Khóa Biểu Tuần (Mới bổ sung) */}
+          <div
+            onClick={() => router.push('/admin/schedule')}
+            className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition cursor-pointer space-y-4 group"
+          >
+            <div className="flex items-center justify-between">
+              <div className="h-10 w-10 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition">
+                <Calendar className="h-5 w-5" />
+              </div>
+              <span className="text-xs font-bold text-teal-600 bg-teal-50 px-2.5 py-1 rounded-full">Lịch tuần</span>
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">Thời Khóa Biểu Tuần</h3>
+              <p className="text-xs text-gray-500 mt-1">Xem tổng hợp lịch học và thời gian bắt đầu của tất cả các lớp trong tuần.</p>
+            </div>
+          </div>
+
+          {/* 2. Quản lý tài khoản */}
           <div
             onClick={() => {
               if (!isMainAdmin) {
@@ -211,7 +228,7 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* 3. Cấu hình hệ thống (BỊ KHÓA VỚI TRỢ GIẢNG VÀ ADMIN PHỤ) */}
+          {/* 3. Cấu hình hệ thống */}
           <div
             onClick={() => {
               if (!isMainAdmin) {
