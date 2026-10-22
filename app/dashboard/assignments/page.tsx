@@ -11,7 +11,7 @@ export default function StudentAssignmentsPage() {
   const [user, setUser] = useState<any>(null)
   const [submittingId, setSubmittingId] = useState<string | null>(null)
   const [answerText, setAnswerText] = useState('')
-  const [answerFile, setAnswerFile] = useState<File | null>(null)
+  const [answerFiles, setAnswerFiles] = useState<File[]>([]) // Đã thay đổi thành mảng File[] để hỗ trợ chọn nhiều ảnh
   const [submitting, setSubmitting] = useState(false)
 
   const router = useRouter()
@@ -54,46 +54,45 @@ export default function StudentAssignmentsPage() {
   }
 
   const handleSubmitAssignment = async (assignmentId: string) => {
-    if (!answerText.trim() && !answerFile) {
+    if (!answerText.trim() && answerFiles.length === 0) {
       alert('Vui lòng nhập nội dung hoặc đính kèm tệp bài làm!')
       return
     }
 
     setSubmitting(true)
-    let fileUrl = null
+    let fileUrls: string[] = []
 
-    if (answerFile) {
-      const fileExt = answerFile.name.split('.').pop()
-      const fileName = `submission_${user.id}_${Date.now()}.${fileExt}`
+    // Vòng lặp upload nhiều file ảnh / tệp lên Supabase Storage
+    for (const file of answerFiles) {
+      const fileExt = file.name.split('.').pop()
+      const fileName = `submission_${user.id}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`
 
       const { error: uploadError } = await supabase.storage
         .from('assignments')
-        .upload(fileName, answerFile, { upsert: true })
+        .upload(fileName, file, { upsert: true })
 
-      if (uploadError) {
-        alert('Lỗi tải tệp lên: ' + uploadError.message)
-        setSubmitting(false)
-        return
+      if (!uploadError) {
+        const { data: publicUrlData } = supabase.storage
+          .from('assignments')
+          .getPublicUrl(fileName)
+        fileUrls.push(publicUrlData.publicUrl)
       }
-
-      const { data: publicUrlData } = supabase.storage
-        .from('assignments')
-        .getPublicUrl(fileName)
-
-      fileUrl = publicUrlData.publicUrl
     }
 
-    // Kiểm tra xem đã có bài nộp trước đó chưa (để hỗ trợ nộp lại / ghi đè hoặc cập nhật mới)
+    // Gộp các đường dẫn URL lại thành một chuỗi cách nhau bởi dấu phẩy
+    const combinedFileUrl = fileUrls.length > 0 ? fileUrls.join(',') : null
+
+    // Kiểm tra xem đã có bài nộp trước đó chưa
     const existingSub = assignments.find(a => a.id === assignmentId)?.submission
 
     let error = null
     if (existingSub) {
-      // Cập nhật lại bài nộp cũ (reset đánh giá về trống để giáo viên chấm lại)
+      // Cập nhật lại bài nộp cũ (giữ lại file cũ nếu không chọn file mới, hoặc dùng chuỗi file mới)
       const { error: updateError } = await supabase
         .from('submissions')
         .update({
           content: answerText.trim() || 'Nộp bài đính kèm tệp',
-          file_url: fileUrl || existingSub.file_url,
+          file_url: combinedFileUrl || existingSub.file_url,
           evaluation: null, // Reset đánh giá khi học sinh nộp lại
           created_at: new Date().toISOString()
         })
@@ -106,7 +105,7 @@ export default function StudentAssignmentsPage() {
           assignment_id: assignmentId,
           student_id: user.id,
           content: answerText.trim() || 'Nộp bài đính kèm tệp',
-          file_url: fileUrl,
+          file_url: combinedFileUrl,
           status: 'submitted',
         },
       ])
@@ -119,7 +118,7 @@ export default function StudentAssignmentsPage() {
       alert('Lỗi khi nộp bài: ' + error.message)
     } else {
       setAnswerText('')
-      setAnswerFile(null)
+      setAnswerFiles([])
       setSubmittingId(null)
       fetchAssignments(user.id)
     }
@@ -162,8 +161,12 @@ export default function StudentAssignmentsPage() {
               {assignments.map((item) => {
                 const finalUrl = getFileUrl(item.file_url)
                 const fileName = item.file_url ? (item.file_url.split('/').pop()?.split('?')[0] || '') : ''
-                const subFileUrl = item.submission?.file_url ? getFileUrl(item.submission.file_url) : null
-                const subFileName = item.submission?.file_url ? (item.submission.file_url.split('/').pop()?.split('?')[0] || '') : ''
+                
+                // Xử lý hiển thị danh sách file đính kèm của học sinh (nếu có nhiều file ngăn cách bằng dấu phẩy)
+                const subFileUrls = item.submission?.file_url 
+                  ? item.submission.file_url.split(',').map((u: string) => getFileUrl(u.trim())).filter(Boolean) 
+                  : []
+
                 const evaluation = item.submission?.evaluation
 
                 return (
@@ -242,24 +245,32 @@ export default function StudentAssignmentsPage() {
                           )}
                         </div>
 
-                        {subFileUrl && (
-                          <div>
-                            <span className="font-semibold text-gray-700">Tệp đính kèm bài làm: </span>
-                            <a
-                              href={subFileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:underline font-medium inline-flex items-center space-x-1 ml-1"
-                            >
-                              <FileUp className="h-3.5 w-3.5 inline" />
-                              <span>{subFileName}</span>
-                            </a>
+                        {subFileUrls.length > 0 && (
+                          <div className="space-y-1">
+                            <span className="font-semibold text-gray-700">Tệp đính kèm bài làm ({subFileUrls.length} ảnh/tệp): </span>
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              {subFileUrls.map((url: string, idx: number) => {
+                                const subName = url.split('/').pop()?.split('?')[0] || `Tệp ${idx + 1}`
+                                return (
+                                  <a
+                                    key={idx}
+                                    href={url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:underline font-medium inline-flex items-center space-x-1 bg-white px-2.5 py-1 rounded border shadow-xs"
+                                  >
+                                    <FileUp className="h-3.5 w-3.5 inline" />
+                                    <span>Ảnh {idx + 1}</span>
+                                  </a>
+                                )
+                              })}
+                            </div>
                           </div>
                         )}
 
                         {evaluation === 'CHƯA ĐẠT' && (
                           <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 font-semibold flex items-center space-x-2">
-                            Bài làm bị đánh giá <b>CHƯA ĐẠT</b>. Vui lòng bấm <b>Nộp lại bài</b> bên dưới để hoàn thiện lại bài tập!
+                            <span>Bài làm bị đánh giá <b>CHƯA ĐẠT</b>. Vui lòng bấm <b>Nộp lại bài</b> bên dưới để hoàn thiện lại bài tập!</span>
                           </div>
                         )}
                       </div>
@@ -280,13 +291,17 @@ export default function StudentAssignmentsPage() {
                             className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-800 text-sm bg-white"
                           />
                           <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Đính kèm ảnh / tài liệu bài làm</label>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Đính kèm nhiều ảnh / tài liệu bài làm</label>
                             <input
                               type="file"
+                              multiple // Cho phép chọn nhiều file ảnh cùng lúc
                               accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-                              onChange={(e) => setAnswerFile(e.target.files ? e.target.files[0] : null)}
+                              onChange={(e) => setAnswerFiles(e.target.files ? Array.from(e.target.files) : [])}
                               className="w-full text-xs text-gray-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
                             />
+                            {answerFiles.length > 0 && (
+                              <p className="text-xs text-blue-700 mt-1 font-semibold">Đã chọn {answerFiles.length} tệp tin đính kèm.</p>
+                            )}
                           </div>
                           <div className="flex justify-end space-x-2 pt-2">
                             <button
@@ -310,7 +325,7 @@ export default function StudentAssignmentsPage() {
                           onClick={() => {
                             setSubmittingId(item.id)
                             setAnswerText(item.submission?.content || '')
-                            setAnswerFile(null)
+                            setAnswerFiles([])
                           }}
                           className={`px-4 py-2 rounded-lg text-sm font-medium transition inline-flex items-center space-x-1.5 ${
                             item.submission?.evaluation === 'CHƯA ĐẠT'

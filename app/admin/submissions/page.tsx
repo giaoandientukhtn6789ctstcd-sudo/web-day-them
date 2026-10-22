@@ -3,12 +3,15 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
-import { ArrowLeft, CheckCircle, FileText, ExternalLink, Download, RotateCw, Award, AlertCircle } from 'lucide-react'
+import { ArrowLeft, CheckCircle, FileText, ExternalLink, Download, RotateCw, Award, AlertCircle, Eye } from 'lucide-react'
 
 export default function AdminSubmissionsPage() {
   const [submissions, setSubmissions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [previewImage, setPreviewImage] = useState<string | null>(null)
+
+  // State Modal toàn màn hình & xoay ảnh hỗ trợ nhiều ảnh
+  const [previewImages, setPreviewImages] = useState<string[]>([])
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [rotation, setRotation] = useState(0)
 
   const router = useRouter()
@@ -114,9 +117,9 @@ export default function AdminSubmissionsPage() {
           ) : (
             <div className="divide-y divide-gray-100">
               {submissions.map((sub) => {
-                const subFileUrl = sub.file_url ? getFileUrl(sub.file_url) : null
-                const subFileName = sub.file_url ? (sub.file_url.split('/').pop()?.split('?')[0] || '') : ''
-                const isImage = /\.(jpg|jpeg|png|webp)$/i.test(subFileName)
+                // Tách danh sách file nếu học sinh nộp nhiều file cách nhau bằng dấu phẩy
+                const rawUrls = sub.file_url ? sub.file_url.split(',').map((u: string) => u.trim()).filter(Boolean) : []
+                const fileUrls = rawUrls.map((u: string) => getFileUrl(u))
 
                 return (
                   <div key={sub.id} className="p-6 space-y-4 hover:bg-gray-50 transition">
@@ -150,41 +153,33 @@ export default function AdminSubmissionsPage() {
                         <span className="text-gray-600">{sub.content}</span>
                       </div>
 
-                      {subFileUrl && (
+                      {fileUrls.length > 0 && (
                         <div className="pt-2 flex flex-wrap gap-2 items-center">
-                          {isImage ? (
-                            <button
-                              onClick={() => {
-                                setPreviewImage(subFileUrl)
-                                setRotation(0)
-                              }}
-                              className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition shadow-sm"
-                            >
-                              <ExternalLink className="h-4 w-4" />
-                              <span>Mở ảnh trực tiếp & Xoay chiều ({subFileName})</span>
-                            </button>
-                          ) : (
+                          <button
+                            onClick={() => {
+                              setPreviewImages(fileUrls)
+                              setCurrentImageIndex(0)
+                              setRotation(0)
+                            }}
+                            className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition shadow-sm cursor-pointer"
+                          >
+                            <Eye className="h-4 w-4" />
+                            <span>Mở bộ sưu tập ảnh ({fileUrls.length} tệp) & Xoay chiều</span>
+                          </button>
+
+                          {fileUrls.map((url: string, idx: number) => (
                             <a
-                              href={subFileUrl}
+                              key={idx}
+                              href={url}
+                              download
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold transition shadow-sm border border-indigo-100"
+                              className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-semibold transition shadow-sm border border-gray-200"
                             >
-                              <ExternalLink className="h-4 w-4" />
-                              <span>Xem trực tiếp tệp ({subFileName})</span>
+                              <Download className="h-4 w-4" />
+                              <span>Tải ảnh {idx + 1}</span>
                             </a>
-                          )}
-
-                          <a
-                            href={subFileUrl}
-                            download
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-semibold transition shadow-sm border border-gray-200"
-                          >
-                            <Download className="h-4 w-4" />
-                            <span>Tải tệp xuống máy</span>
-                          </a>
+                          ))}
                         </div>
                       )}
 
@@ -232,31 +227,57 @@ export default function AdminSubmissionsPage() {
         </div>
       </div>
 
-      {/* Modal xem ảnh và xoay chiều */}
-      {previewImage && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center p-4 z-50">
-          <div className="absolute top-4 right-4 flex space-x-3">
-            <button
-              onClick={() => setRotation((prev) => (prev + 90) % 360)}
-              className="flex items-center space-x-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-lg transition cursor-pointer"
-            >
-              <RotateCw className="h-4 w-4" />
-              <span>Xoay ảnh ({rotation}°)</span>
-            </button>
-            <button
-              onClick={() => setPreviewImage(null)}
-              className="bg-white hover:bg-gray-100 text-gray-800 px-4 py-2 rounded-xl text-sm font-semibold shadow-lg transition cursor-pointer"
-            >
-              Đóng
-            </button>
+      {/* Modal Toàn màn hình xem và xoay ảnh hỗ trợ cuộn */}
+      {previewImages.length > 0 && (
+        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-between p-4 overflow-hidden">
+          {/* Thanh công cụ điều khiển phía trên */}
+          <div className="w-full max-w-5xl flex items-center justify-between bg-white/10 backdrop-blur-md px-6 py-3 rounded-2xl text-white shadow-xl">
+            <div className="flex items-center space-x-4">
+              <span className="text-sm font-bold">
+                Ảnh {currentImageIndex + 1} / {previewImages.length}
+              </span>
+              {previewImages.length > 1 && (
+                <div className="flex space-x-1.5">
+                  {previewImages.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => { setCurrentImageIndex(idx); setRotation(0); }}
+                      className={`w-7 h-7 rounded-lg text-xs font-bold cursor-pointer transition ${currentImageIndex === idx ? 'bg-indigo-600 text-white' : 'bg-white/20 text-white hover:bg-white/30'}`}
+                    >
+                      {idx + 1}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setRotation((prev) => (prev + 90) % 360)}
+                className="flex items-center space-x-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer shadow"
+              >
+                <RotateCw className="h-4 w-4" />
+                <span>Xoay ảnh ({rotation}°)</span>
+              </button>
+              <button
+                onClick={() => setPreviewImages([])}
+                className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
           </div>
-          <div className="max-w-4xl max-h-[85vh] overflow-auto flex items-center justify-center p-2">
-            <img
-              src={previewImage}
-              alt="Bài làm học sinh"
-              style={{ transform: `rotate(${rotation}deg)`, transition: 'transform 0.3s ease' }}
-              className="max-h-[80vh] object-contain rounded-lg shadow-2xl bg-black"
-            />
+
+          {/* Vùng xem ảnh toàn màn hình có thanh cuộn (scroll) không bị cắt nội dung */}
+          <div className="flex-1 w-full flex items-center justify-center overflow-auto p-4">
+            <div className="min-w-full min-h-full flex items-center justify-center">
+              <img
+                src={previewImages[currentImageIndex]}
+                alt="Bài làm học sinh"
+                style={{ transform: `rotate(${rotation}deg)`, transition: 'transform 0.3s ease' }}
+                className="max-w-none object-contain shadow-2xl rounded-lg my-auto cursor-zoom-in"
+              />
+            </div>
           </div>
         </div>
       )}
