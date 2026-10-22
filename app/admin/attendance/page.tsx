@@ -19,28 +19,71 @@ export default function AdminAttendancePage() {
   const supabase = createClient()
 
   useEffect(() => {
-    setSelectedDate(new Date().toISOString().split('T')[0])
-    fetchClasses()
+    const todayStr = new Date().toISOString().split('T')[0]
+    setSelectedDate(todayStr)
+    fetchClasses(todayStr)
   }, [])
 
+  // Mỗi khi thay đổi Lớp hoặc Ngày điểm danh, tự động tính toán giờ bắt đầu theo TKB
   useEffect(() => {
-    if (selectedClassId) {
-      const currentCls = classes.find((c) => c.id === selectedClassId)
-      if (currentCls && currentCls.start_time) {
-        setClassStartTime(currentCls.start_time)
-      }
+    if (selectedClassId && selectedDate) {
+      updateStartTimeBasedOnSchedule(selectedClassId, selectedDate)
       fetchClassData()
     }
   }, [selectedClassId, selectedDate])
 
-  const fetchClasses = async () => {
+  const fetchClasses = async (dateStr: string) => {
     const { data } = await supabase.from('classes').select('*').order('class_name')
     if (data && data.length > 0) {
       setClasses(data)
-      setSelectedClassId(data[0].id)
-      if (data[0].start_time) setClassStartTime(data[0].start_time)
+      const firstClass = data[0]
+      setSelectedClassId(firstClass.id)
+      extractStartTime(firstClass, dateStr)
     }
     setLoading(false)
+  }
+
+  // Hàm trích xuất giờ bắt đầu dựa vào thứ của ngày được chọn và chuỗi schedule của lớp
+  const extractStartTime = (cls: any, dateStr: string) => {
+    if (!cls || !cls.schedule) return
+
+    // Chuyển đổi chuỗi ngày (YYYY-MM-DD) thành tên Thứ trong tiếng Việt
+    const dateObj = new Date(dateStr)
+    const dayIndex = dateObj.getDay() // 0 là Chủ Nhật, 1 là Thứ 2, ...
+    const dayNames = ['Chủ Nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7']
+    const targetDayName = dayNames[dayIndex]
+
+    // Phân tích chuỗi schedule (Ví dụ định dạng: "Thứ 2: 17:30 | Thứ 4: 17:30 | Thứ 6: 19:00")
+    try {
+      const parts = cls.schedule.split('|')
+      let foundTime = ''
+      for (const part of parts) {
+        if (part.includes(targetDayName)) {
+          // Lấy phần giờ phía sau dấu hai chấm
+          const timeMatch = part.match(/\d{1,2}:\d{2}/)
+          if (timeMatch) {
+            foundTime = timeMatch[0]
+            break
+          }
+        }
+      }
+      if (foundTime) {
+        setClassStartTime(foundTime)
+      } else if (cls.start_time && cls.start_time !== 'Linh hoạt') {
+        setClassStartTime(cls.start_time)
+      }
+    } catch (e) {
+      if (cls.start_time && cls.start_time !== 'Linh hoạt') {
+        setClassStartTime(cls.start_time)
+      }
+    }
+  }
+
+  const updateStartTimeBasedOnSchedule = (classId: string, dateStr: string) => {
+    const currentCls = classes.find((c) => c.id === classId)
+    if (currentCls) {
+      extractStartTime(currentCls, dateStr)
+    }
   }
 
   const fetchClassData = async () => {
@@ -64,14 +107,6 @@ export default function AdminAttendancePage() {
 
   const handleStartTimeChange = async (newTime: string) => {
     setClassStartTime(newTime)
-    if (!selectedClassId) return
-
-    await supabase
-      .from('classes')
-      .update({ start_time: newTime })
-      .eq('id', selectedClassId)
-
-    setClasses(classes.map(cls => cls.id === selectedClassId ? { ...cls, start_time: newTime } : cls))
   }
 
   const calculateLateMinutes = (checkInTime: string, startTime: string) => {
@@ -95,7 +130,6 @@ export default function AdminAttendancePage() {
       lateMins = calculateLateMinutes(timeString, classStartTime)
     }
 
-    // 1. Lưu hoặc cập nhật điểm danh
     const { error } = await supabase
       .from('attendance')
       .upsert(
@@ -115,7 +149,6 @@ export default function AdminAttendancePage() {
       return
     }
 
-    // 2. Tự động gửi thông báo nội bộ cho học sinh nếu vắng hoặc đi trễ
     if (status === 'Absent') {
       await supabase.from('notifications').insert([
         {
@@ -210,7 +243,7 @@ export default function AdminAttendancePage() {
               <span>Điểm danh lớp: {currentClassInfo?.class_name}</span>
             </div>
             <span className="text-xs font-semibold bg-blue-50 text-blue-700 px-3 py-1 rounded-full">
-              Giờ quy định: {classStartTime}
+              Giờ bắt đầu theo TKB: {classStartTime}
             </span>
           </div>
 

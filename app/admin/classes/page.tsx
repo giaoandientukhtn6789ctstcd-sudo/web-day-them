@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
-import { ArrowLeft, BookOpen, Plus, Trash2, Users, Clock } from 'lucide-react'
+import { ArrowLeft, BookOpen, Plus, Trash2, Users, Clock, Calendar } from 'lucide-react'
 
 export default function AdminClassesPage() {
   const [classes, setClasses] = useState<any[]>([])
@@ -14,9 +14,19 @@ export default function AdminClassesPage() {
   const [className, setClassName] = useState('')
   const [subject, setSubject] = useState('Toán')
   const [grade, setGrade] = useState('Khối 6')
-  const [schedule, setSchedule] = useState('Thứ 2 (17:30) - Thứ 4 (17:30) - Thứ 6 (19:00)') // Cho phép nhập linh hoạt lịch và giờ theo từng buổi
-  const [isModalOpen, setIsModalOpen] = useState(false)
+  
+  // Trạng thái giờ học cho từng thứ trong tuần
+  const [scheduleTimes, setScheduleTimes] = useState<Record<string, string>>({
+    'Thứ 2': '17:30',
+    'Thứ 3': '',
+    'Thứ 4': '17:30',
+    'Thứ 5': '',
+    'Thứ 6': '19:00',
+    'Thứ 7': '',
+    'Chủ Nhật': ''
+  })
 
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedStudentId, setSelectedStudentId] = useState('')
   const [sttNumber, setSttNumber] = useState('1')
 
@@ -62,13 +72,21 @@ export default function AdminClassesPage() {
     e.preventDefault()
     if (!className.trim()) return
 
+    // Tổng hợp lịch học từ các thứ có nhập giờ
+    const activeSchedules = Object.entries(scheduleTimes)
+      .filter(([_, time]) => time.trim() !== '')
+      .map(([day, time]) => `${day}: ${time}`)
+
+    const scheduleString = activeSchedules.length > 0 ? activeSchedules.join(' | ') : 'Chưa có lịch'
+
     const { error } = await supabase.from('classes').insert([
       {
         class_name: className.trim(),
         subject,
         grade,
-        schedule: schedule.trim(), // Lưu chuỗi lịch học chi tiết vào cột schedule
-        start_time: 'Linh hoạt',     // Gán mặc định vì giờ đã được tích hợp chi tiết trong lịch
+        schedule: scheduleString,
+        schedule_details: scheduleTimes, // Lưu chi tiết JSON giờ học theo thứ nếu cột hỗ trợ, hoặc lưu gộp vào schedule
+        start_time: 'Linh hoạt',
       },
     ])
 
@@ -76,7 +94,6 @@ export default function AdminClassesPage() {
       alert('Lỗi tạo lớp: ' + error.message)
     } else {
       setClassName('')
-      setSchedule('Thứ 2 (17:30) - Thứ 4 (17:30) - Thứ 6 (19:00)')
       setIsModalOpen(false)
       fetchClasses()
     }
@@ -133,7 +150,7 @@ export default function AdminClassesPage() {
             className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow transition font-medium cursor-pointer"
           >
             <Plus className="h-5 w-5" />
-            <span>Tạo lớp học mới</span>
+            <span>Tạo lớp học mới & TKB</span>
           </button>
         </div>
 
@@ -191,7 +208,7 @@ export default function AdminClassesPage() {
                   <div>
                     <h2 className="text-xl font-bold text-gray-900">{selectedClass.class_name}</h2>
                     <p className="text-xs text-indigo-600 font-semibold mt-1">
-                      Lịch học chi tiết: {selectedClass.schedule} | Môn: {selectedClass.subject}
+                      Thời khóa biểu: {selectedClass.schedule} | Môn: {selectedClass.subject}
                     </p>
                   </div>
                   <button
@@ -288,9 +305,12 @@ export default function AdminClassesPage() {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
-            <h2 className="text-xl font-bold text-gray-900">Tạo Lớp Học Mới</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl my-8">
+            <h2 className="text-xl font-bold text-gray-900 flex items-center space-x-2">
+              <Calendar className="h-5 w-5 text-indigo-600" />
+              <span>Tạo Lớp Học & Cấu Hình Thời Khóa Biểu</span>
+            </h2>
             
             <form onSubmit={handleCreateClass} className="space-y-4">
               <div>
@@ -335,17 +355,23 @@ export default function AdminClassesPage() {
                 </div>
               </div>
 
+              {/* Bảng cấu hình thời gian biểu riêng cho từng thứ */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Lịch học & Giờ học chi tiết</label>
-                <input
-                  type="text"
-                  value={schedule}
-                  onChange={(e) => setSchedule(e.target.value)}
-                  placeholder="Ví dụ: T2 (17:30) - T4 (17:30) - T6 (19:00)"
-                  required
-                  className="w-full px-4 py-2 border rounded-lg outline-none text-sm text-gray-800"
-                />
-                <p className="text-xs text-gray-400 mt-1">Bạn có thể ghi rõ giờ học riêng cho từng thứ trong tuần.</p>
+                <label className="block text-sm font-bold text-gray-800 mb-2">Thời gian bắt đầu theo từng thứ trong tuần</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 bg-gray-50 p-3 rounded-xl border">
+                  {Object.keys(scheduleTimes).map((day) => (
+                    <div key={day} className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-600">{day}</label>
+                      <input
+                        type="time"
+                        value={scheduleTimes[day]}
+                        onChange={(e) => setScheduleTimes({ ...scheduleTimes, [day]: e.target.value })}
+                        className="w-full px-2.5 py-1.5 border rounded-lg bg-white text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Để trống nếu không có lịch học vào ngày đó.</p>
               </div>
 
               <div className="flex justify-end space-x-3 pt-4 border-t">
