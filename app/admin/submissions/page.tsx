@@ -227,7 +227,7 @@ export default function AdminSubmissionsPage() {
         </div>
       </div>
 
-      {/* Modal Toàn màn hình xem và xoay ảnh hỗ trợ cuộn */}
+      {/* Modal Toàn màn hình xem và xoay ảnh hiển thị vừa khít màn hình ban đầu */}
       {previewImages.length > 0 && (
         <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-between p-4 overflow-hidden">
           {/* Thanh công cụ điều khiển phía trên */}
@@ -268,14 +268,14 @@ export default function AdminSubmissionsPage() {
             </div>
           </div>
 
-          {/* Vùng xem ảnh toàn màn hình có thanh cuộn (scroll) không bị cắt nội dung */}
+          {/* Vùng xem ảnh hiển thị vừa khít màn hình, có thể cuộn và thu phóng */}
           <div className="flex-1 w-full flex items-center justify-center overflow-auto p-4">
             <div className="min-w-full min-h-full flex items-center justify-center">
               <img
                 src={previewImages[currentImageIndex]}
                 alt="Bài làm học sinh"
                 style={{ transform: `rotate(${rotation}deg)`, transition: 'transform 0.3s ease' }}
-                className="max-w-none object-contain shadow-2xl rounded-lg my-auto cursor-zoom-in"
+                className="max-w-full max-h-[80vh] w-auto h-auto object-contain shadow-2xl rounded-lg my-auto cursor-zoom-in"
               />
             </div>
           </div>

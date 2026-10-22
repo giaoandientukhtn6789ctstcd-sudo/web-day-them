@@ -11,7 +11,7 @@ export default function StudentAssignmentsPage() {
   const [user, setUser] = useState<any>(null)
   const [submittingId, setSubmittingId] = useState<string | null>(null)
   const [answerText, setAnswerText] = useState('')
-  const [answerFiles, setAnswerFiles] = useState<File[]>([]) // Đã thay đổi thành mảng File[] để hỗ trợ chọn nhiều ảnh
+  const [answerFiles, setAnswerFiles] = useState<File[]>([]) // Mảng chứa nhiều file ảnh
   const [submitting, setSubmitting] = useState(false)
 
   const router = useRouter()
@@ -62,7 +62,7 @@ export default function StudentAssignmentsPage() {
     setSubmitting(true)
     let fileUrls: string[] = []
 
-    // Vòng lặp upload nhiều file ảnh / tệp lên Supabase Storage
+    // Vòng lặp upload tất cả các tệp/ảnh học sinh đã chọn lên Supabase Storage
     for (const file of answerFiles) {
       const fileExt = file.name.split('.').pop()
       const fileName = `submission_${user.id}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`
@@ -79,7 +79,7 @@ export default function StudentAssignmentsPage() {
       }
     }
 
-    // Gộp các đường dẫn URL lại thành một chuỗi cách nhau bởi dấu phẩy
+    // Gộp tất cả các đường dẫn URL thành chuỗi ngăn cách bởi dấu phẩy
     const combinedFileUrl = fileUrls.length > 0 ? fileUrls.join(',') : null
 
     // Kiểm tra xem đã có bài nộp trước đó chưa
@@ -87,7 +87,7 @@ export default function StudentAssignmentsPage() {
 
     let error = null
     if (existingSub) {
-      // Cập nhật lại bài nộp cũ (giữ lại file cũ nếu không chọn file mới, hoặc dùng chuỗi file mới)
+      // Cập nhật lại bài nộp cũ (giữ lại file cũ nếu không chọn file mới)
       const { error: updateError } = await supabase
         .from('submissions')
         .update({
@@ -162,7 +162,7 @@ export default function StudentAssignmentsPage() {
                 const finalUrl = getFileUrl(item.file_url)
                 const fileName = item.file_url ? (item.file_url.split('/').pop()?.split('?')[0] || '') : ''
                 
-                // Xử lý hiển thị danh sách file đính kèm của học sinh (nếu có nhiều file ngăn cách bằng dấu phẩy)
+                // Xử lý hiển thị danh sách nhiều tệp đính kèm của học sinh
                 const subFileUrls = item.submission?.file_url 
                   ? item.submission.file_url.split(',').map((u: string) => getFileUrl(u.trim())).filter(Boolean) 
                   : []
@@ -249,21 +249,18 @@ export default function StudentAssignmentsPage() {
                           <div className="space-y-1">
                             <span className="font-semibold text-gray-700">Tệp đính kèm bài làm ({subFileUrls.length} ảnh/tệp): </span>
                             <div className="flex flex-wrap gap-2 pt-1">
-                              {subFileUrls.map((url: string, idx: number) => {
-                                const subName = url.split('/').pop()?.split('?')[0] || `Tệp ${idx + 1}`
-                                return (
-                                  <a
-                                    key={idx}
-                                    href={url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-600 hover:underline font-medium inline-flex items-center space-x-1 bg-white px-2.5 py-1 rounded border shadow-xs"
-                                  >
-                                    <FileUp className="h-3.5 w-3.5 inline" />
-                                    <span>Ảnh {idx + 1}</span>
-                                  </a>
-                                )
-                              })}
+                              {subFileUrls.map((url: string, idx: number) => (
+                                <a
+                                  key={idx}
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:underline font-medium inline-flex items-center space-x-1 bg-white px-2.5 py-1 rounded border shadow-xs"
+                                >
+                                  <FileUp className="h-3.5 w-3.5 inline" />
+                                  <span>Ảnh {idx + 1}</span>
+                                </a>
+                              ))}
                             </div>
                           </div>
                         )}
@@ -294,13 +291,22 @@ export default function StudentAssignmentsPage() {
                             <label className="block text-xs font-medium text-gray-700 mb-1">Đính kèm nhiều ảnh / tài liệu bài làm</label>
                             <input
                               type="file"
-                              multiple // Cho phép chọn nhiều file ảnh cùng lúc
+                              multiple // Bắt buộc cho phép chọn nhiều file ảnh cùng lúc
                               accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-                              onChange={(e) => setAnswerFiles(e.target.files ? Array.from(e.target.files) : [])}
+                              onChange={(e) => {
+                                if (e.target.files) {
+                                  setAnswerFiles(Array.from(e.target.files))
+                                }
+                              }}
                               className="w-full text-xs text-gray-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
                             />
                             {answerFiles.length > 0 && (
-                              <p className="text-xs text-blue-700 mt-1 font-semibold">Đã chọn {answerFiles.length} tệp tin đính kèm.</p>
+                              <div className="mt-2 space-y-1 bg-white p-2 rounded border">
+                                <p className="text-xs font-bold text-blue-700">Đã chọn {answerFiles.length} tệp tin:</p>
+                                {answerFiles.map((f, i) => (
+                                  <p key={i} className="text-xs text-gray-600 truncate"> - {f.name}</p>
+                                ))}
+                              </div>
                             )}
                           </div>
                           <div className="flex justify-end space-x-2 pt-2">
