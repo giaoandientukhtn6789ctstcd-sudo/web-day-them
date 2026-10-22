@@ -14,8 +14,7 @@ export default function AdminClassesPage() {
   const [className, setClassName] = useState('')
   const [subject, setSubject] = useState('Toán')
   const [grade, setGrade] = useState('Khối 6')
-  const [schedule, setSchedule] = useState('Thứ 3 - Thứ 5')
-  const [startTime, setStartTime] = useState('18:30')
+  const [schedule, setSchedule] = useState('Thứ 2 (17:30) - Thứ 4 (17:30) - Thứ 6 (19:00)') // Cho phép nhập linh hoạt lịch và giờ theo từng buổi
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   const [selectedStudentId, setSelectedStudentId] = useState('')
@@ -68,8 +67,8 @@ export default function AdminClassesPage() {
         class_name: className.trim(),
         subject,
         grade,
-        schedule,
-        start_time: startTime,
+        schedule: schedule.trim(), // Lưu chuỗi lịch học chi tiết vào cột schedule
+        start_time: 'Linh hoạt',     // Gán mặc định vì giờ đã được tích hợp chi tiết trong lịch
       },
     ])
 
@@ -77,6 +76,7 @@ export default function AdminClassesPage() {
       alert('Lỗi tạo lớp: ' + error.message)
     } else {
       setClassName('')
+      setSchedule('Thứ 2 (17:30) - Thứ 4 (17:30) - Thứ 6 (19:00)')
       setIsModalOpen(false)
       fetchClasses()
     }
@@ -165,7 +165,7 @@ export default function AdminClassesPage() {
                           e.stopPropagation()
                           handleDeleteClass(cls.id)
                         }}
-                        className="text-red-500 hover:text-red-700 p-1"
+                        className="text-red-500 hover:text-red-700 p-1 cursor-pointer"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -174,9 +174,9 @@ export default function AdminClassesPage() {
                       <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded font-semibold">{cls.subject}</span>
                       <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded font-semibold">{cls.grade}</span>
                     </div>
-                    <p className="text-xs text-gray-500 flex items-center space-x-1 pt-1">
-                      <Clock className="h-3.5 w-3.5 text-indigo-600" />
-                      <span>{cls.schedule} ({cls.start_time || '18:30'})</span>
+                    <p className="text-xs text-gray-600 flex items-start space-x-1 pt-1">
+                      <Clock className="h-3.5 w-3.5 text-indigo-600 shrink-0 mt-0.5" />
+                      <span className="font-medium">{cls.schedule}</span>
                     </p>
                   </div>
                 ))}
@@ -191,7 +191,7 @@ export default function AdminClassesPage() {
                   <div>
                     <h2 className="text-xl font-bold text-gray-900">{selectedClass.class_name}</h2>
                     <p className="text-xs text-indigo-600 font-semibold mt-1">
-                      Lịch: {selectedClass.schedule} | Giờ bắt đầu: {selectedClass.start_time || '18:30'} | Môn: {selectedClass.subject}
+                      Lịch học chi tiết: {selectedClass.schedule} | Môn: {selectedClass.subject}
                     </p>
                   </div>
                   <button
@@ -267,7 +267,7 @@ export default function AdminClassesPage() {
                               <td className="p-3 text-right">
                                 <button
                                   onClick={() => handleRemoveStudent(item.id)}
-                                  className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition"
+                                  className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition cursor-pointer"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </button>
@@ -336,39 +336,29 @@ export default function AdminClassesPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Lịch học</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Lịch học & Giờ học chi tiết</label>
                 <input
                   type="text"
                   value={schedule}
                   onChange={(e) => setSchedule(e.target.value)}
-                  placeholder="Ví dụ: Thứ 2 - Thứ 4..."
+                  placeholder="Ví dụ: T2 (17:30) - T4 (17:30) - T6 (19:00)"
                   required
                   className="w-full px-4 py-2 border rounded-lg outline-none text-sm text-gray-800"
                 />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Giờ bắt đầu học (Quy định)</label>
-                <input
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  required
-                  className="w-full px-4 py-2 border rounded-lg outline-none text-sm text-gray-800"
-                />
+                <p className="text-xs text-gray-400 mt-1">Bạn có thể ghi rõ giờ học riêng cho từng thứ trong tuần.</p>
               </div>
 
               <div className="flex justify-end space-x-3 pt-4 border-t">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border rounded-lg text-gray-600 text-sm font-medium"
+                  className="px-4 py-2 border rounded-lg text-gray-600 text-sm font-medium cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium"
+                  className="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium cursor-pointer hover:bg-indigo-700 transition"
                 >
                   Tạo lớp
                 </button>
