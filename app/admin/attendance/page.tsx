@@ -10,6 +10,7 @@ export default function AdminAttendancePage() {
   const [selectedClassId, setSelectedClassId] = useState<string>('')
   const [selectedDate, setSelectedDate] = useState<string>('')
   const [classStartTime, setClassStartTime] = useState<string>('18:30')
+  const [adminUser, setAdminUser] = useState<any>(null)
   
   const [studentsInClass, setStudentsInClass] = useState<any[]>([])
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([])
@@ -19,6 +20,10 @@ export default function AdminAttendancePage() {
   const supabase = createClient()
 
   useEffect(() => {
+    const storedUser = localStorage.getItem('currentUser')
+    if (storedUser) {
+      setAdminUser(JSON.parse(storedUser))
+    }
     const todayStr = new Date().toISOString().split('T')[0]
     setSelectedDate(todayStr)
     fetchClasses(todayStr)
@@ -106,6 +111,11 @@ export default function AdminAttendancePage() {
   }
 
   const handleStartTimeChange = async (newTime: string) => {
+    const isMainAdmin = adminUser?.id?.toUpperCase() === 'ADMIN' || adminUser?.student_code?.toUpperCase() === 'ADMIN'
+    if (!isMainAdmin) {
+      alert('Chỉ có ADMIN chính mới có quyền thay đổi giờ bắt đầu!')
+      return
+    }
     setClassStartTime(newTime)
   }
 
@@ -172,6 +182,7 @@ export default function AdminAttendancePage() {
     fetchClassData()
   }
 
+  const isMainAdmin = adminUser?.id?.toUpperCase() === 'ADMIN' || adminUser?.student_code?.toUpperCase() === 'ADMIN'
   const currentClassInfo = classes.find((c) => c.id === selectedClassId)
 
   return (
@@ -230,7 +241,11 @@ export default function AdminAttendancePage() {
                 type="time"
                 value={classStartTime}
                 onChange={(e) => handleStartTimeChange(e.target.value)}
-                className="px-3 py-2 border rounded-lg bg-white text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500"
+                disabled={!isMainAdmin}
+                title={!isMainAdmin ? 'Chỉ ADMIN chính mới có quyền đổi giờ bắt đầu' : ''}
+                className={`px-3 py-2 border rounded-lg text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  !isMainAdmin ? 'bg-gray-100 text-gray-500 cursor-not-allowed opacity-80' : 'bg-white text-gray-800'
+                }`}
               />
             </div>
           </div>
