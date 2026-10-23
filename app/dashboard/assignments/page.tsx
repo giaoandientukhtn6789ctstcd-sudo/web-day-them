@@ -30,18 +30,39 @@ export default function StudentAssignmentsPage() {
 
   const fetchAssignments = async (userId: string) => {
     setLoading(true)
+
+    // 1. Lấy danh sách lớp mà học sinh này đang tham gia
+    const { data: studentClasses } = await supabase
+      .from('class_students')
+      .select('class_id, classes:class_id (class_name)')
+      .eq('student_id', userId)
+
+    const myClassIds = studentClasses?.map((sc: any) => sc.class_id) || []
+    const myClassNames = studentClasses?.map((sc: any) => sc.classes?.class_name).filter(Boolean) || []
+
+    // 2. Lấy tất cả bài tập
     const { data: assignData } = await supabase
       .from('assignments')
       .select('*')
       .order('created_at', { ascending: false })
 
+    // 3. Lọc bài tập: chỉ lấy bài tập thuộc lớp của học sinh hoặc bài tập chung ("Tất cả các lớp")
+    const filteredAssignments = assignData ? assignData.filter((item) => {
+      if (!item.class_name || item.class_name === 'Tất cả các lớp' || item.class_name === 'all') {
+        return true
+      }
+      // Kiểm tra xem tên lớp của bài tập có khớp với lớp học sinh tham gia không
+      return myClassNames.includes(item.class_name)
+    }) : []
+
+    // 4. Lấy danh sách bài nộp của học sinh này
     const { data: subData } = await supabase
       .from('submissions')
       .select('*')
       .eq('student_id', userId)
 
-    if (assignData) {
-      const combined = assignData.map((item) => {
+    if (filteredAssignments) {
+      const combined = filteredAssignments.map((item) => {
         const sub = subData?.find((s) => s.assignment_id === item.id)
         return {
           ...item,
@@ -138,7 +159,7 @@ export default function StudentAssignmentsPage() {
         <div className="flex items-center justify-between">
           <button
             onClick={() => router.push('/dashboard')}
-            className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200 transition"
+            className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200 transition cursor-pointer"
           >
             <ArrowLeft className="h-4 w-4" />
             <span>Quay lại Trang chủ</span>
@@ -155,7 +176,7 @@ export default function StudentAssignmentsPage() {
           {loading ? (
             <div className="p-8 text-center text-gray-500">Đang tải danh sách bài tập...</div>
           ) : assignments.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">Chưa có bài tập nào được giao.</div>
+            <div className="p-8 text-center text-gray-500">Chưa có bài tập nào được giao cho lớp của bạn.</div>
           ) : (
             <div className="divide-y divide-gray-100">
               {assignments.map((item) => {
@@ -312,14 +333,14 @@ export default function StudentAssignmentsPage() {
                           <div className="flex justify-end space-x-2 pt-2">
                             <button
                               onClick={() => setSubmittingId(null)}
-                              className="px-3 py-1.5 border rounded-lg text-gray-600 hover:bg-gray-100 text-sm font-medium bg-white"
+                              className="px-3 py-1.5 border rounded-lg text-gray-600 hover:bg-gray-100 text-sm font-medium bg-white cursor-pointer"
                             >
                               Hủy
                             </button>
                             <button
                               onClick={() => handleSubmitAssignment(item.id)}
                               disabled={submitting}
-                              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition flex items-center space-x-1 shadow"
+                              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition flex items-center space-x-1 shadow cursor-pointer"
                             >
                               <Send className="h-3.5 w-3.5" />
                               <span>{submitting ? 'Đang gửi...' : 'Xác nhận gửi bài'}</span>
@@ -333,7 +354,7 @@ export default function StudentAssignmentsPage() {
                             setAnswerText(item.submission?.content || '')
                             setAnswerFiles([])
                           }}
-                          className={`px-4 py-2 rounded-lg text-sm font-medium transition inline-flex items-center space-x-1.5 ${
+                          className={`px-4 py-2 rounded-lg text-sm font-medium transition inline-flex items-center space-x-1.5 cursor-pointer ${
                             item.submission?.evaluation === 'CHƯA ĐẠT'
                               ? 'bg-red-600 hover:bg-red-700 text-white shadow'
                               : item.submission
