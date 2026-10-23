@@ -74,7 +74,7 @@ export default function AdminClassesPage() {
 
     // Tổng hợp lịch học từ các thứ có nhập giờ
     const activeSchedules = Object.entries(scheduleTimes)
-      .filter(([_, time]) => time.trim() !== '')
+      .filter(([_, time]) => time && time.trim() !== '')
       .map(([day, time]) => `${day}: ${time}`)
 
     const scheduleString = activeSchedules.length > 0 ? activeSchedules.join(' | ') : 'Chưa có lịch'
@@ -84,8 +84,7 @@ export default function AdminClassesPage() {
         class_name: className.trim(),
         subject,
         grade,
-        schedule: scheduleString,
-        schedule_details: scheduleTimes, // Lưu chi tiết JSON giờ học theo thứ nếu cột hỗ trợ, hoặc lưu gộp vào schedule
+        schedule: scheduleString, // Lưu chuỗi lịch học chi tiết vào cột schedule có sẵn
         start_time: 'Linh hoạt',
       },
     ])
