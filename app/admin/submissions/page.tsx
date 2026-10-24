@@ -3,11 +3,18 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
-import { ArrowLeft, CheckCircle, FileText, ExternalLink, Download, RotateCw, Award, AlertCircle, Eye } from 'lucide-react'
+import { ArrowLeft, CheckCircle, FileText, ExternalLink, Download, RotateCw, Award, AlertCircle, Eye, Filter, BookOpen, Users } from 'lucide-react'
 
 export default function AdminSubmissionsPage() {
   const [submissions, setSubmissions] = useState<any[]>([])
+  const [assignments, setAssignments] = useState<any[]>([])
+  const [classes, setClasses] = useState<any[]>([])
+  const [classStudents, setClassStudents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Bộ lọc
+  const [selectedClassId, setSelectedClassId] = useState<string>('all')
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState<string>('all')
 
   // State Modal toàn màn hình & xoay ảnh hỗ trợ nhiều ảnh
   const [previewImages, setPreviewImages] = useState<string[]>([])
@@ -18,22 +25,36 @@ export default function AdminSubmissionsPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    fetchSubmissions()
+    fetchInitialData()
   }, [])
 
-  const fetchSubmissions = async () => {
+  const fetchInitialData = async () => {
     setLoading(true)
-    const { data } = await supabase
+    
+    // Lấy danh sách lớp
+    const { data: classData } = await supabase.from('classes').select('*').order('class_name')
+    if (classData) setClasses(classData)
+
+    // Lấy danh sách bài tập
+    const { data: assignData } = await supabase.from('assignments').select('*').order('created_at', { ascending: false })
+    if (assignData) setAssignments(assignData)
+
+    // Lấy liên kết học sinh - lớp
+    const { data: studentClassData } = await supabase.from('class_students').select('class_id, student_id')
+    if (studentClassData) setClassStudents(studentClassData)
+
+    // Lấy toàn bộ bài nộp kèm thông tin học sinh và bài tập
+    const { data: subData } = await supabase
       .from('submissions')
       .select(`
         *,
         users:student_id (full_name, student_code),
-        assignments:assignment_id (title)
+        assignments:assignment_id (id, title, file_url, class_name)
       `)
       .order('created_at', { ascending: false })
 
-    if (data) {
-      setSubmissions(data)
+    if (subData) {
+      setSubmissions(subData)
     }
     setLoading(false)
   }
@@ -47,7 +68,7 @@ export default function AdminSubmissionsPage() {
     if (error) {
       alert('Lỗi cập nhật đánh giá: ' + error.message)
     } else {
-      fetchSubmissions()
+      fetchInitialData()
     }
   }
 
@@ -59,25 +80,79 @@ export default function AdminSubmissionsPage() {
     return data.publicUrl
   }
 
-  // Thống kê số liệu
-  const totalSubmissions = submissions.length
-  const countTot = submissions.filter(s => s.evaluation === 'TỐT').length
-  const countKha = submissions.filter(s => s.evaluation === 'KHÁ').length
-  const countDat = submissions.filter(s => s.evaluation === 'ĐẠT').length
-  const countChuaDat = submissions.filter(s => s.evaluation === 'CHƯA ĐẠT').length
+  // Lọc bài nộp theo lớp và bài tập được chọn
+  const filteredSubmissions = submissions.filter((sub) => {
+    // Lọc theo bài tập
+    if (selectedAssignmentId !== 'all' && sub.assignment_id !== selectedAssignmentId) {
+      return false
+    }
+    // Lọc theo lớp
+    if (selectedClassId !== 'all') {
+      const cls = classes.find(c => c.id === selectedClassId)
+      // Kiểm tra xem bài tập hoặc học sinh có thuộc lớp này không
+      const isAssignmentInClass = sub.assignments?.class_name === cls?.class_name || sub.assignments?.class_name === 'Tất cả các lớp'
+      const isStudentInClass = classStudents.some(cs => cs.class_id === selectedClassId && cs.student_id === sub.student_id)
+      if (!isAssignmentInClass && !isStudentInClass) return false
+    }
+    return true
+  })
+
+  // Thống kê số liệu dựa trên danh sách đã lọc
+  const totalSubmissions = filteredSubmissions.length
+  const countTot = filteredSubmissions.filter(s => s.evaluation === 'TỐT').length
+  const countKha = filteredSubmissions.filter(s => s.evaluation === 'KHÁ').length
+  const countDat = filteredSubmissions.filter(s => s.evaluation === 'ĐẠT').length
+  const countChuaDat = filteredSubmissions.filter(s => s.evaluation === 'CHƯA ĐẠT').length
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <button
             onClick={() => router.push('/admin')}
-            className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200 transition"
+            className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200 transition cursor-pointer"
           >
             <ArrowLeft className="h-4 w-4" />
             <span>Quay lại Quản trị</span>
           </button>
           <h1 className="text-2xl font-bold text-gray-900">Quản lý Bài nộp của Học sinh</h1>
+        </div>
+
+        {/* Thanh lọc theo Lớp và Bài tập */}
+        <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-center gap-4">
+          <div className="flex items-center space-x-2">
+            <BookOpen className="h-4 w-4 text-indigo-600" />
+            <span className="text-sm font-bold text-gray-700">Lọc theo Lớp:</span>
+            <select
+              value={selectedClassId}
+              onChange={(e) => setSelectedClassId(e.target.value)}
+              className="px-3 py-2 border rounded-lg bg-white text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="all">Tất cả các lớp</option>
+              {classes.map((cls) => (
+                <option key={cls.id} value={cls.id}>
+                  {cls.class_name} ({cls.subject})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Filter className="h-4 w-4 text-indigo-600" />
+            <span className="text-sm font-bold text-gray-700">Loại bài tập:</span>
+            <select
+              value={selectedAssignmentId}
+              onChange={(e) => setSelectedAssignmentId(e.target.value)}
+              className="px-3 py-2 border rounded-lg bg-white text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500 max-w-[250px]"
+            >
+              <option value="all">Tất cả bài tập</option>
+              {assignments.map((assign) => (
+                <option key={assign.id} value={assign.id}>
+                  {assign.title} ({assign.class_name || 'Chung'})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Bảng Thống kê Tổng quan */}
@@ -107,19 +182,22 @@ export default function AdminSubmissionsPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-6 border-b border-gray-100 flex items-center space-x-2 text-gray-700">
             <FileText className="h-5 w-5 text-indigo-600" />
-            <span className="font-bold">Danh sách các bài làm đã gửi lên hệ thống</span>
+            <span className="font-bold">Danh sách các bài làm đã gửi lên hệ thống ({filteredSubmissions.length})</span>
           </div>
 
           {loading ? (
             <div className="p-8 text-center text-gray-500">Đang tải danh sách bài nộp...</div>
-          ) : submissions.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">Chưa có học sinh nào nộp bài.</div>
+          ) : filteredSubmissions.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">Không có bài nộp nào phù hợp với bộ lọc.</div>
           ) : (
             <div className="divide-y divide-gray-100">
-              {submissions.map((sub) => {
-                // Tách danh sách file nếu học sinh nộp nhiều file cách nhau bằng dấu phẩy
+              {filteredSubmissions.map((sub) => {
+                // Tách danh sách file của học sinh
                 const rawUrls = sub.file_url ? sub.file_url.split(',').map((u: string) => u.trim()).filter(Boolean) : []
                 const fileUrls = rawUrls.map((u: string) => getFileUrl(u))
+
+                // Lấy ảnh đề bài của giáo viên (nếu có đính kèm trong bảng assignments)
+                const assignmentFileUrl = sub.assignments?.file_url ? getFileUrl(sub.assignments.file_url) : null
 
                 return (
                   <div key={sub.id} className="p-6 space-y-4 hover:bg-gray-50 transition">
@@ -147,6 +225,37 @@ export default function AdminSubmissionsPage() {
                       </div>
                     </div>
 
+                    {/* Hiển thị ảnh đề bài của giáo viên ngay trên hàng bài làm để dễ đối chiếu */}
+                    {assignmentFileUrl && (
+                      <div className="p-3 bg-indigo-50/60 rounded-lg border border-indigo-100 flex items-center justify-between text-xs">
+                        <div className="flex items-center space-x-2">
+                          <BookOpen className="h-4 w-4 text-indigo-600" />
+                          <span className="font-bold text-indigo-900">Đề bài gốc của giáo viên:</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => {
+                              setPreviewImages([assignmentFileUrl])
+                              setCurrentImageIndex(0)
+                              setRotation(0)
+                            }}
+                            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold transition cursor-pointer shadow-xs"
+                          >
+                            Xem đề bài
+                          </button>
+                          <a
+                            href={assignmentFileUrl}
+                            download
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1 bg-white hover:bg-gray-100 text-indigo-700 rounded-md font-semibold border border-indigo-200 transition"
+                          >
+                            Tải đề
+                          </a>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="p-4 bg-gray-50 rounded-lg space-y-3 text-sm">
                       <div>
                         <span className="font-semibold text-gray-700">Nội dung bài làm: </span>
@@ -164,7 +273,7 @@ export default function AdminSubmissionsPage() {
                             className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition shadow-sm cursor-pointer"
                           >
                             <Eye className="h-4 w-4" />
-                            <span>Mở bộ sưu tập ảnh ({fileUrls.length} tệp) & Xoay chiều</span>
+                            <span>Mở bộ sưu tập ảnh bài làm ({fileUrls.length} tệp) & Xoay chiều</span>
                           </button>
 
                           {fileUrls.map((url: string, idx: number) => (
@@ -273,7 +382,7 @@ export default function AdminSubmissionsPage() {
             <div className="min-w-full min-h-full flex items-center justify-center">
               <img
                 src={previewImages[currentImageIndex]}
-                alt="Bài làm học sinh"
+                alt="Xem trước"
                 style={{ transform: `rotate(${rotation}deg)`, transition: 'transform 0.3s ease' }}
                 className="max-w-full max-h-[80vh] w-auto h-auto object-contain shadow-2xl rounded-lg my-auto cursor-zoom-in"
               />
