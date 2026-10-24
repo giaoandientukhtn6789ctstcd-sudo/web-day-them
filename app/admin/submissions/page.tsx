@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
-import { ArrowLeft, CheckCircle, FileText, ExternalLink, Download, RotateCw, Award, AlertCircle, Eye, Filter, BookOpen, Users } from 'lucide-react'
+import { ArrowLeft, CheckCircle, FileText, ExternalLink, Download, RotateCw, Award, AlertCircle, Eye, Filter, BookOpen, Users, XCircle } from 'lucide-react'
 
 export default function AdminSubmissionsPage() {
   const [submissions, setSubmissions] = useState<any[]>([])
   const [assignments, setAssignments] = useState<any[]>([])
   const [classes, setClasses] = useState<any[]>([])
   const [classStudents, setClassStudents] = useState<any[]>([])
+  const [allStudents, setAllStudents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   // Bộ lọc
@@ -33,14 +34,23 @@ export default function AdminSubmissionsPage() {
     
     // Lấy danh sách lớp
     const { data: classData } = await supabase.from('classes').select('*').order('class_name')
-    if (classData) setClasses(classData)
+    if (classData) {
+      setClasses(classData)
+      if (classData.length > 0 && selectedClassId === 'all') {
+        setSelectedClassId(classData[0].id) // Mặc định chọn lớp đầu tiên để hiện bảng thống kê sinh động
+      }
+    }
 
     // Lấy danh sách bài tập
     const { data: assignData } = await supabase.from('assignments').select('*').order('created_at', { ascending: false })
     if (assignData) setAssignments(assignData)
 
+    // Lấy tất cả học sinh
+    const { data: studentData } = await supabase.from('users').select('*').eq('role', 'student')
+    if (studentData) setAllStudents(studentData)
+
     // Lấy liên kết học sinh - lớp
-    const { data: studentClassData } = await supabase.from('class_students').select('class_id, student_id')
+    const { data: studentClassData } = await supabase.from('class_students').select('class_id, student_id, stt')
     if (studentClassData) setClassStudents(studentClassData)
 
     // Lấy toàn bộ bài nộp kèm thông tin học sinh và bài tập
@@ -82,14 +92,11 @@ export default function AdminSubmissionsPage() {
 
   // Lọc bài nộp theo lớp và bài tập được chọn
   const filteredSubmissions = submissions.filter((sub) => {
-    // Lọc theo bài tập
     if (selectedAssignmentId !== 'all' && sub.assignment_id !== selectedAssignmentId) {
       return false
     }
-    // Lọc theo lớp
     if (selectedClassId !== 'all') {
       const cls = classes.find(c => c.id === selectedClassId)
-      // Kiểm tra xem bài tập hoặc học sinh có thuộc lớp này không
       const isAssignmentInClass = sub.assignments?.class_name === cls?.class_name || sub.assignments?.class_name === 'Tất cả các lớp'
       const isStudentInClass = classStudents.some(cs => cs.class_id === selectedClassId && cs.student_id === sub.student_id)
       if (!isAssignmentInClass && !isStudentInClass) return false
@@ -104,6 +111,16 @@ export default function AdminSubmissionsPage() {
   const countDat = filteredSubmissions.filter(s => s.evaluation === 'ĐẠT').length
   const countChuaDat = filteredSubmissions.filter(s => s.evaluation === 'CHƯA ĐẠT').length
 
+  // Danh sách học sinh và thống kê bài tập của lớp đang được chọn
+  const currentSelectedClass = classes.find(c => c.id === selectedClassId)
+  const studentsInCurrentClass = selectedClassId === 'all' ? [] : classStudents.filter(cs => cs.class_id === selectedClassId)
+  
+  // Bài tập được giao cho lớp này (hoặc bài tập chung)
+  const assignmentsForThisClass = assignments.filter(a => {
+    if (selectedClassId === 'all') return true
+    return a.class_name === currentSelectedClass?.class_name || a.class_name === 'Tất cả các lớp'
+  })
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -115,7 +132,7 @@ export default function AdminSubmissionsPage() {
             <ArrowLeft className="h-4 w-4" />
             <span>Quay lại Quản trị</span>
           </button>
-          <h1 className="text-2xl font-bold text-gray-900">Quản lý Bài nộp của Học sinh</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Quản lý Bài nộp & Thống kê theo Lớp</h1>
         </div>
 
         {/* Thanh lọc theo Lớp và Bài tập */}
@@ -179,6 +196,83 @@ export default function AdminSubmissionsPage() {
           </div>
         </div>
 
+        {/* BẢNG THỐNG KÊ TÌNH HÌNH NỘP BÀI CỦA TỪNG HỌC SINH TRONG LỚP */}
+        {selectedClassId !== 'all' && currentSelectedClass && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <div className="flex items-center space-x-2 text-gray-800 font-bold">
+                <Users className="h-5 w-5 text-indigo-600" />
+                <span>Thống kê chi tiết nộp bài: {currentSelectedClass.class_name}</span>
+              </div>
+              <span className="text-xs font-semibold bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full">
+                Tổng số bài giao cho lớp: {assignmentsForThisClass.length} bài
+              </span>
+            </div>
+
+            {studentsInCurrentClass.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">Lớp học này chưa có học sinh nào.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 text-xs font-bold text-gray-500 uppercase border-b">
+                      <th className="p-3 px-4">STT</th>
+                      <th className="p-3">Mã HS</th>
+                      <th className="p-3">Họ và tên học sinh</th>
+                      <th className="p-3 text-center">Số bài đã nộp</th>
+                      <th className="p-3 text-center">Số lần chưa nộp bài</th>
+                      <th className="p-3">Trạng thái chi tiết</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 text-sm">
+                    {studentsInCurrentClass.map((cs) => {
+                      const studentInfo = allStudents.find(s => s.id === cs.student_id)
+                      // Các bài tập mà học sinh này đã nộp thuộc lớp này
+                      const studentSubs = submissions.filter(sub => sub.student_id === cs.student_id && assignmentsForThisClass.some(a => a.id === sub.assignment_id))
+                      const submittedCount = studentSubs.length
+                      const unsubmittedCount = Math.max(0, assignmentsForThisClass.length - submittedCount)
+
+                      return (
+                        <tr key={cs.student_id} className="hover:bg-gray-50 transition">
+                          <td className="p-3 px-4 font-bold text-indigo-600">{cs.stt}</td>
+                          <td className="p-3 font-semibold text-gray-700">{studentInfo?.student_code || '---'}</td>
+                          <td className="p-3 font-bold text-gray-900">{studentInfo?.full_name || 'Không rõ'}</td>
+                          <td className="p-3 text-center font-bold text-green-600">{submittedCount} / {assignmentsForThisClass.length}</td>
+                          <td className="p-3 text-center">
+                            {unsubmittedCount > 0 ? (
+                              <span className="px-2.5 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold">
+                                {unsubmittedCount} lần thiếu
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">
+                                Đã hoàn thành đủ
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3 text-xs text-gray-600">
+                            {submittedCount === assignmentsForThisClass.length ? (
+                              <span className="text-green-600 font-semibold flex items-center space-x-1">
+                                <CheckCircle className="h-3.5 w-3.5" />
+                                <span>Hoàn thành 100% bài tập</span>
+                              </span>
+                            ) : (
+                              <span className="text-amber-600 font-semibold flex items-center space-x-1">
+                                <AlertCircle className="h-3.5 w-3.5" />
+                                <span>Còn thiếu {unsubmittedCount} bài tập</span>
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* DANH SÁCH BÀI LÀM CHI TIẾT */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-6 border-b border-gray-100 flex items-center space-x-2 text-gray-700">
             <FileText className="h-5 w-5 text-indigo-600" />
@@ -192,11 +286,8 @@ export default function AdminSubmissionsPage() {
           ) : (
             <div className="divide-y divide-gray-100">
               {filteredSubmissions.map((sub) => {
-                // Tách danh sách file của học sinh
                 const rawUrls = sub.file_url ? sub.file_url.split(',').map((u: string) => u.trim()).filter(Boolean) : []
                 const fileUrls = rawUrls.map((u: string) => getFileUrl(u))
-
-                // Lấy ảnh đề bài của giáo viên (nếu có đính kèm trong bảng assignments)
                 const assignmentFileUrl = sub.assignments?.file_url ? getFileUrl(sub.assignments.file_url) : null
 
                 return (
@@ -339,7 +430,6 @@ export default function AdminSubmissionsPage() {
       {/* Modal Toàn màn hình xem và xoay ảnh hiển thị vừa khít màn hình ban đầu */}
       {previewImages.length > 0 && (
         <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-between p-4 overflow-hidden">
-          {/* Thanh công cụ điều khiển phía trên */}
           <div className="w-full max-w-5xl flex items-center justify-between bg-white/10 backdrop-blur-md px-6 py-3 rounded-2xl text-white shadow-xl">
             <div className="flex items-center space-x-4">
               <span className="text-sm font-bold">
@@ -377,7 +467,6 @@ export default function AdminSubmissionsPage() {
             </div>
           </div>
 
-          {/* Vùng xem ảnh hiển thị vừa khít màn hình, có thể cuộn và thu phóng */}
           <div className="flex-1 w-full flex items-center justify-center overflow-auto p-4">
             <div className="min-w-full min-h-full flex items-center justify-center">
               <img
