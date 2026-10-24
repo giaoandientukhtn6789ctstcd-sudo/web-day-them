@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
-import { ArrowLeft, BookOpen, Send, CheckCircle, ExternalLink, Download, FileUp, AlertCircle, Award, RefreshCw } from 'lucide-react'
+import { ArrowLeft, BookOpen, Send, CheckCircle, ExternalLink, Download, FileUp, AlertCircle, Award, RefreshCw, X } from 'lucide-react'
 
 export default function StudentAssignmentsPage() {
   const [assignments, setAssignments] = useState<any[]>([])
@@ -11,7 +11,7 @@ export default function StudentAssignmentsPage() {
   const [user, setUser] = useState<any>(null)
   const [submittingId, setSubmittingId] = useState<string | null>(null)
   const [answerText, setAnswerText] = useState('')
-  const [answerFiles, setAnswerFiles] = useState<File[]>([]) // Mảng chứa nhiều file ảnh
+  const [answerFiles, setAnswerFiles] = useState<File[]>([]) // Mảng tích lũy nhiều file ảnh
   const [submitting, setSubmitting] = useState(false)
 
   const router = useRouter()
@@ -37,7 +37,6 @@ export default function StudentAssignmentsPage() {
       .select('class_id, classes:class_id (class_name)')
       .eq('student_id', userId)
 
-    const myClassIds = studentClasses?.map((sc: any) => sc.class_id) || []
     const myClassNames = studentClasses?.map((sc: any) => sc.classes?.class_name).filter(Boolean) || []
 
     // 2. Lấy tất cả bài tập
@@ -51,7 +50,6 @@ export default function StudentAssignmentsPage() {
       if (!item.class_name || item.class_name === 'Tất cả các lớp' || item.class_name === 'all') {
         return true
       }
-      // Kiểm tra xem tên lớp của bài tập có khớp với lớp học sinh tham gia không
       return myClassNames.includes(item.class_name)
     }) : []
 
@@ -108,7 +106,6 @@ export default function StudentAssignmentsPage() {
 
     let error = null
     if (existingSub) {
-      // Cập nhật lại bài nộp cũ (giữ lại file cũ nếu không chọn file mới)
       const { error: updateError } = await supabase
         .from('submissions')
         .update({
@@ -120,7 +117,6 @@ export default function StudentAssignmentsPage() {
         .eq('id', existingSub.id)
       error = updateError
     } else {
-      // Thêm mới bài nộp
       const { error: insertError } = await supabase.from('submissions').insert([
         {
           assignment_id: assignmentId,
@@ -183,7 +179,6 @@ export default function StudentAssignmentsPage() {
                 const finalUrl = getFileUrl(item.file_url)
                 const fileName = item.file_url ? (item.file_url.split('/').pop()?.split('?')[0] || '') : ''
                 
-                // Xử lý hiển thị danh sách nhiều tệp đính kèm của học sinh
                 const subFileUrls = item.submission?.file_url 
                   ? item.submission.file_url.split(',').map((u: string) => getFileUrl(u.trim())).filter(Boolean) 
                   : []
@@ -309,30 +304,51 @@ export default function StudentAssignmentsPage() {
                             className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-800 text-sm bg-white"
                           />
                           <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Đính kèm nhiều ảnh / tài liệu bài làm</label>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Đính kèm nhiều ảnh / tài liệu bài làm (chọn nhiều lần để cộng dồn ảnh)</label>
                             <input
                               type="file"
-                              multiple // Bắt buộc cho phép chọn nhiều file ảnh cùng lúc
+                              multiple
                               accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
                               onChange={(e) => {
                                 if (e.target.files) {
-                                  setAnswerFiles(Array.from(e.target.files))
+                                  const newFiles = Array.from(e.target.files)
+                                  // Cộng dồn file mới chọn vào danh sách file cũ thay vì thay thế
+                                  setAnswerFiles((prev) => [...prev, ...newFiles])
+                                  // Reset giá trị input để có thể tiếp tục chọn thêm chính file đó nếu cần
+                                  e.target.value = ''
                                 }
                               }}
                               className="w-full text-xs text-gray-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
                             />
+                            
+                            {/* Hiển thị danh sách các tệp đã chọn kèm nút xóa từng tệp */}
                             {answerFiles.length > 0 && (
-                              <div className="mt-2 space-y-1 bg-white p-2 rounded border">
-                                <p className="text-xs font-bold text-blue-700">Đã chọn {answerFiles.length} tệp tin:</p>
+                              <div className="mt-2 space-y-1.5 bg-white p-3 rounded-lg border">
+                                <p className="text-xs font-bold text-blue-700">Đã chọn tổng cộng {answerFiles.length} tệp tin:</p>
                                 {answerFiles.map((f, i) => (
-                                  <p key={i} className="text-xs text-gray-600 truncate"> - {f.name}</p>
+                                  <div key={i} className="flex items-center justify-between text-xs bg-gray-50 px-2 py-1 rounded">
+                                    <span className="truncate max-w-[260px] text-gray-700"> - {f.name}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setAnswerFiles((prev) => prev.filter((_, idx) => idx !== i))
+                                      }}
+                                      className="text-red-500 hover:text-red-700 p-1 cursor-pointer font-bold"
+                                      title="Xóa ảnh này"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
                                 ))}
                               </div>
                             )}
                           </div>
                           <div className="flex justify-end space-x-2 pt-2">
                             <button
-                              onClick={() => setSubmittingId(null)}
+                              onClick={() => {
+                                setSubmittingId(null)
+                                setAnswerFiles([])
+                              }}
                               className="px-3 py-1.5 border rounded-lg text-gray-600 hover:bg-gray-100 text-sm font-medium bg-white cursor-pointer"
                             >
                               Hủy
