@@ -11,7 +11,7 @@ export default function StudentAssignmentsPage() {
   const [user, setUser] = useState<any>(null)
   const [submittingId, setSubmittingId] = useState<string | null>(null)
   const [answerText, setAnswerText] = useState('')
-  const [answerFiles, setAnswerFiles] = useState<File[]>([]) // Mảng tích lũy nhiều file ảnh
+  const [answerFiles, setAnswerFiles] = useState<File[]>([])
   const [submitting, setSubmitting] = useState(false)
 
   const router = useRouter()
@@ -31,7 +31,6 @@ export default function StudentAssignmentsPage() {
   const fetchAssignments = async (userId: string) => {
     setLoading(true)
 
-    // 1. Lấy danh sách lớp mà học sinh này đang tham gia
     const { data: studentClasses } = await supabase
       .from('class_students')
       .select('class_id, classes:class_id (class_name)')
@@ -39,13 +38,11 @@ export default function StudentAssignmentsPage() {
 
     const myClassNames = studentClasses?.map((sc: any) => sc.classes?.class_name).filter(Boolean) || []
 
-    // 2. Lấy tất cả bài tập
     const { data: assignData } = await supabase
       .from('assignments')
       .select('*')
       .order('created_at', { ascending: false })
 
-    // 3. Lọc bài tập: chỉ lấy bài tập thuộc lớp của học sinh hoặc bài tập chung ("Tất cả các lớp")
     const filteredAssignments = assignData ? assignData.filter((item) => {
       if (!item.class_name || item.class_name === 'Tất cả các lớp' || item.class_name === 'all') {
         return true
@@ -53,7 +50,6 @@ export default function StudentAssignmentsPage() {
       return myClassNames.includes(item.class_name)
     }) : []
 
-    // 4. Lấy danh sách bài nộp của học sinh này
     const { data: subData } = await supabase
       .from('submissions')
       .select('*')
@@ -72,6 +68,58 @@ export default function StudentAssignmentsPage() {
     setLoading(false)
   }
 
+  // Hàm nén ảnh tự động trên trình duyệt giữ nguyên nét chữ và hình học
+  const compressImage = (file: File): Promise<File> => {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith('image/')) {
+        resolve(file)
+        return
+      }
+
+      const reader = new FileReader()
+      reader.readAsDataURL(file)
+      reader.onload = (event) => {
+        const img = new Image()
+        img.src = event.target?.result as string
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          let width = img.width
+          let height = img.height
+
+          const MAX_DIMENSION = 1200
+          if (width > height && width > MAX_DIMENSION) {
+            height = Math.round((height * MAX_DIMENSION) / width)
+            width = MAX_DIMENSION
+          } else if (height > width && height > MAX_DIMENSION) {
+            width = Math.round((width * MAX_DIMENSION) / height)
+            height = MAX_DIMENSION
+          }
+
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          ctx?.drawImage(img, 0, 0, width, height)
+
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                const compressedFile = new File([blob], file.name, {
+                  type: 'image/jpeg',
+                  lastModified: Date.now(),
+                })
+                resolve(compressedFile)
+              } else {
+                resolve(file)
+              }
+            },
+            'image/jpeg',
+            0.8
+          )
+        }
+      }
+    })
+  }
+
   const handleSubmitAssignment = async (assignmentId: string) => {
     if (!answerText.trim() && answerFiles.length === 0) {
       alert('Vui lòng nhập nội dung hoặc đính kèm tệp bài làm!')
@@ -81,27 +129,32 @@ export default function StudentAssignmentsPage() {
     setSubmitting(true)
     let fileUrls: string[] = []
 
-    // Vòng lặp upload tất cả các tệp/ảnh học sinh đã chọn lên Supabase Storage
-    for (const file of answerFiles) {
-      const fileExt = file.name.split('.').pop()
-      const fileName = `submission_${user.id}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`
+    try {
+      // Tối ưu hóa: Upload đồng thời tất cả các ảnh bằng Promise.all để siêu tốc độ
+      const uploadPromises = answerFiles.map(async (file) => {
+        const fileExt = file.name.split('.').pop()
+        const fileName = `submission_${user.id}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`
 
-      const { error: uploadError } = await supabase.storage
-        .from('assignments')
-        .upload(fileName, file, { upsert: true })
-
-      if (!uploadError) {
-        const { data: publicUrlData } = supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('assignments')
-          .getPublicUrl(fileName)
-        fileUrls.push(publicUrlData.publicUrl)
-      }
+          .upload(fileName, file, { upsert: true })
+
+        if (!uploadError) {
+          const { data: publicUrlData } = supabase.storage
+            .from('assignments')
+            .getPublicUrl(fileName)
+          return publicUrlData.publicUrl
+        }
+        return null
+      })
+
+      const results = await Promise.all(uploadPromises)
+      fileUrls = results.filter(Boolean) as string[]
+    } catch (err) {
+      console.error('Lỗi upload ảnh:', err)
     }
 
-    // Gộp tất cả các đường dẫn URL thành chuỗi ngăn cách bởi dấu phẩy
     const combinedFileUrl = fileUrls.length > 0 ? fileUrls.join(',') : null
-
-    // Kiểm tra xem đã có bài nộp trước đó chưa
     const existingSub = assignments.find(a => a.id === assignmentId)?.submission
 
     let error = null
@@ -111,7 +164,7 @@ export default function StudentAssignmentsPage() {
         .update({
           content: answerText.trim() || 'Nộp bài đính kèm tệp',
           file_url: combinedFileUrl || existingSub.file_url,
-          evaluation: null, // Reset đánh giá khi học sinh nộp lại
+          evaluation: null,
           created_at: new Date().toISOString()
         })
         .eq('id', existingSub.id)
@@ -240,7 +293,6 @@ export default function StudentAssignmentsPage() {
                       </div>
                     </div>
 
-                    {/* Hiển thị bài đã nộp và đánh giá của giáo viên */}
                     {item.submission && (
                       <div className="mt-2 p-4 bg-gray-50 rounded-lg space-y-3 text-xs text-gray-600 border border-gray-200">
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
@@ -289,7 +341,6 @@ export default function StudentAssignmentsPage() {
                       </div>
                     )}
 
-                    {/* Form nộp bài hoặc nộp lại */}
                     <div className="mt-4 pt-4 border-t border-gray-100">
                       {submittingId === item.id ? (
                         <div className="space-y-3 bg-blue-50 p-4 rounded-xl border border-blue-100">
@@ -304,24 +355,28 @@ export default function StudentAssignmentsPage() {
                             className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-800 text-sm bg-white"
                           />
                           <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Đính kèm nhiều ảnh / tài liệu bài làm (chọn nhiều lần để cộng dồn ảnh)</label>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Đính kèm nhiều ảnh (Tự động nén nhanh & cộng dồn)</label>
                             <input
                               type="file"
                               multiple
                               accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-                              onChange={(e) => {
+                              onChange={async (e) => {
                                 if (e.target.files) {
-                                  const newFiles = Array.from(e.target.files)
-                                  // Cộng dồn file mới chọn vào danh sách file cũ thay vì thay thế
-                                  setAnswerFiles((prev) => [...prev, ...newFiles])
-                                  // Reset giá trị input để có thể tiếp tục chọn thêm chính file đó nếu cần
+                                  const rawFiles = Array.from(e.target.files)
+                                  setSubmitting(true)
+                                  
+                                  const compressedFiles = await Promise.all(
+                                    rawFiles.map((file) => compressImage(file))
+                                  )
+
+                                  setAnswerFiles((prev) => [...prev, ...compressedFiles])
+                                  setSubmitting(false)
                                   e.target.value = ''
                                 }
                               }}
                               className="w-full text-xs text-gray-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
                             />
                             
-                            {/* Hiển thị danh sách các tệp đã chọn kèm nút xóa từng tệp */}
                             {answerFiles.length > 0 && (
                               <div className="mt-2 space-y-1.5 bg-white p-3 rounded-lg border">
                                 <p className="text-xs font-bold text-blue-700">Đã chọn tổng cộng {answerFiles.length} tệp tin:</p>
@@ -359,7 +414,7 @@ export default function StudentAssignmentsPage() {
                               className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition flex items-center space-x-1 shadow cursor-pointer"
                             >
                               <Send className="h-3.5 w-3.5" />
-                              <span>{submitting ? 'Đang gửi...' : 'Xác nhận gửi bài'}</span>
+                              <span>{submitting ? 'Đang nén & gửi...' : 'Xác nhận gửi bài'}</span>
                             </button>
                           </div>
                         </div>
