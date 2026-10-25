@@ -68,6 +68,7 @@ export default function StudentAssignmentsPage() {
     setLoading(false)
   }
 
+  // Hàm nén ảnh tự động trên trình duyệt giữ nguyên nét chữ và hình học
   const compressImage = (file: File): Promise<File> => {
     return new Promise((resolve) => {
       if (!file.type.startsWith('image/')) {
@@ -200,11 +201,11 @@ export default function StudentAssignmentsPage() {
     return data.publicUrl
   }
 
-  // Hàm tạo link xem trực tiếp thông minh (Hỗ trợ PDF, Ảnh xem trực tiếp, Word qua Google Docs Viewer)
+  // Hàm tạo link xem trực tiếp thông minh (Ép mở trực tuyến cho cả PDF, Word qua Google Docs Viewer mà không tải về)
   const getViewingUrl = (rawUrl: string) => {
     const url = getFileUrl(rawUrl)
     const lowerUrl = url.toLowerCase()
-    if (lowerUrl.endsWith('.doc') || lowerUrl.endsWith('.docx')) {
+    if (lowerUrl.endsWith('.pdf') || lowerUrl.endsWith('.doc') || lowerUrl.endsWith('.docx')) {
       return `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`
     }
     return url

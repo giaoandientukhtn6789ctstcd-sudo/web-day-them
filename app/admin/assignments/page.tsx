@@ -112,11 +112,11 @@ export default function AdminAssignmentsPage() {
     return data.publicUrl
   }
 
-  // Hỗ trợ xem trực tiếp file PDF và Word (Word qua Google Docs Viewer) mà không ép tải về
+  // Hỗ trợ xem trực tiếp file PDF và Word (qua Google Docs Viewer) mà không ép tải về
   const getViewingUrl = (rawUrl: string) => {
     const url = getFileUrl(rawUrl)
     const lowerUrl = url.toLowerCase()
-    if (lowerUrl.endsWith('.doc') || lowerUrl.endsWith('.docx')) {
+    if (lowerUrl.endsWith('.pdf') || lowerUrl.endsWith('.doc') || lowerUrl.endsWith('.docx')) {
       return `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`
     }
     return url
