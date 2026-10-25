@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
-import { ArrowLeft, Plus, BookOpen, Calendar, FileUp, Trash2 } from 'lucide-react'
+import { ArrowLeft, Plus, BookOpen, Calendar, FileUp, Trash2, ExternalLink } from 'lucide-react'
 
 export default function AdminAssignmentsPage() {
   const [assignments, setAssignments] = useState<any[]>([])
@@ -28,7 +28,6 @@ export default function AdminAssignmentsPage() {
   }, [])
 
   const fetchClasses = async () => {
-    // Đã sửa 'name' thành 'class_name' cho khớp với cấu trúc bảng classes trên Supabase
     const { data } = await supabase.from('classes').select('*').order('class_name', { ascending: true })
     if (data) setClassesList(data)
   }
@@ -105,20 +104,38 @@ export default function AdminAssignmentsPage() {
     }
   }
 
+  const getFileUrl = (fileUrl: string) => {
+    if (!fileUrl) return '#'
+    if (fileUrl.startsWith('http')) return fileUrl
+    const fileName = fileUrl.split('/').pop()?.split('?')[0] || ''
+    const { data } = supabase.storage.from('assignments').getPublicUrl(fileName)
+    return data.publicUrl
+  }
+
+  // Hỗ trợ xem trực tiếp file PDF và Word (Word qua Google Docs Viewer) mà không ép tải về
+  const getViewingUrl = (rawUrl: string) => {
+    const url = getFileUrl(rawUrl)
+    const lowerUrl = url.toLowerCase()
+    if (lowerUrl.endsWith('.doc') || lowerUrl.endsWith('.docx')) {
+      return `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`
+    }
+    return url
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <button
             onClick={() => router.push('/admin')}
-            className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200 transition"
+            className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200 transition cursor-pointer"
           >
             <ArrowLeft className="h-4 w-4" />
             <span>Quay lại Quản trị</span>
           </button>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow transition font-medium"
+            className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow transition font-medium cursor-pointer"
           >
             <Plus className="h-5 w-5" />
             <span>Giao bài tập mới</span>
@@ -137,54 +154,59 @@ export default function AdminAssignmentsPage() {
             <div className="p-8 text-center text-gray-500">Chưa có bài tập nào được giao.</div>
           ) : (
             <div className="divide-y divide-gray-100">
-              {assignments.map((item) => (
-                <div key={item.id} className="p-6 flex justify-between items-start hover:bg-gray-50 transition">
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-2">
-                      <h3 className="text-lg font-bold text-gray-900">{item.title}</h3>
-                      <span className="text-xs px-2.5 py-0.5 bg-indigo-50 text-indigo-700 rounded-full font-semibold">
-                        {item.class_name || 'Tất cả các lớp'}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600">{item.description || 'Không có mô tả chi tiết.'}</p>
-                    
-                    {item.file_url && (
-                      <div className="pt-1">
-                        <a
-                          href={item.file_url.startsWith('http') ? item.file_url : '#'}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => {
-                            if (!item.file_url.startsWith('http')) {
-                              e.preventDefault()
-                              alert('Tệp đính kèm: ' + item.file_url)
-                            }
-                          }}
-                          className="inline-flex items-center space-x-1.5 px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-medium transition"
-                        >
-                          <FileUp className="h-3.5 w-3.5" />
-                          <span>Tệp đính kèm: {item.file_url.split('/').pop()}</span>
-                        </a>
+              {assignments.map((item) => {
+                const viewingUrl = item.file_url ? getViewingUrl(item.file_url) : '#'
+                const isHttp = item.file_url && item.file_url.startsWith('http')
+
+                return (
+                  <div key={item.id} className="p-6 flex justify-between items-start hover:bg-gray-50 transition">
+                    <div className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <h3 className="text-lg font-bold text-gray-900">{item.title}</h3>
+                        <span className="text-xs px-2.5 py-0.5 bg-indigo-50 text-indigo-700 rounded-full font-semibold">
+                          {item.class_name || 'Tất cả các lớp'}
+                        </span>
                       </div>
-                    )}
+                      <p className="text-sm text-gray-600">{item.description || 'Không có mô tả chi tiết.'}</p>
+                      
+                      {item.file_url && (
+                        <div className="pt-1 flex flex-wrap gap-2">
+                          <a
+                            href={isHttp ? viewingUrl : '#'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => {
+                              if (!isHttp) {
+                                e.preventDefault()
+                                alert('Tệp đính kèm: ' + item.file_url)
+                              }
+                            }}
+                            className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold transition shadow-sm border border-blue-100 cursor-pointer"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                            <span>Xem trực tiếp đề: {item.file_url.split('/').pop()}</span>
+                          </a>
+                        </div>
+                      )}
 
-                    <div className="flex items-center space-x-4 text-xs text-indigo-600 font-medium pt-2">
-                      <span className="flex items-center space-x-1">
-                        <Calendar className="h-3.5 w-3.5" />
-                        <span>Hạn nộp: {item.due_date ? new Date(item.due_date).toLocaleDateString('vi-VN') : 'Không giới hạn'}</span>
-                      </span>
+                      <div className="flex items-center space-x-4 text-xs text-indigo-600 font-medium pt-2">
+                        <span className="flex items-center space-x-1">
+                          <Calendar className="h-3.5 w-3.5" />
+                          <span>Hạn nộp: {item.due_date ? new Date(item.due_date).toLocaleDateString('vi-VN') : 'Không giới hạn'}</span>
+                        </span>
+                      </div>
                     </div>
-                  </div>
 
-                  <button
-                    onClick={() => handleDelete(item.id)}
-                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition"
-                    title="Xóa bài tập"
-                  >
-                    <Trash2 className="h-5 w-5" />
-                  </button>
-                </div>
-              ))}
+                    <button
+                      onClick={() => handleDelete(item.id)}
+                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                      title="Xóa bài tập"
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </button>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
@@ -206,7 +228,6 @@ export default function AdminAssignmentsPage() {
                 >
                   <option value="">-- Tất cả các lớp --</option>
                   {classesList.map((cls) => (
-                    // Đã sửa cls.name thành cls.class_name để khớp dữ liệu hiển thị
                     <option key={cls.id} value={cls.class_name}>
                       {cls.class_name} {cls.subject ? `(${cls.subject})` : ''}
                     </option>
@@ -262,14 +283,14 @@ export default function AdminAssignmentsPage() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border rounded-lg text-gray-600 hover:bg-gray-50 text-sm font-medium"
+                  className="px-4 py-2 border rounded-lg text-gray-600 hover:bg-gray-50 text-sm font-medium cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={uploading}
-                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition"
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition cursor-pointer"
                 >
                   {uploading ? 'Đang tải lên...' : 'Giao bài tập'}
                 </button>

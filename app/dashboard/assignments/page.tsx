@@ -68,7 +68,6 @@ export default function StudentAssignmentsPage() {
     setLoading(false)
   }
 
-  // Hàm nén ảnh tự động trên trình duyệt giữ nguyên nét chữ và hình học
   const compressImage = (file: File): Promise<File> => {
     return new Promise((resolve) => {
       if (!file.type.startsWith('image/')) {
@@ -130,7 +129,6 @@ export default function StudentAssignmentsPage() {
     let fileUrls: string[] = []
 
     try {
-      // Tối ưu hóa: Upload đồng thời tất cả các ảnh bằng Promise.all để siêu tốc độ
       const uploadPromises = answerFiles.map(async (file) => {
         const fileExt = file.name.split('.').pop()
         const fileName = `submission_${user.id}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`
@@ -202,6 +200,16 @@ export default function StudentAssignmentsPage() {
     return data.publicUrl
   }
 
+  // Hàm tạo link xem trực tiếp thông minh (Hỗ trợ PDF, Ảnh xem trực tiếp, Word qua Google Docs Viewer)
+  const getViewingUrl = (rawUrl: string) => {
+    const url = getFileUrl(rawUrl)
+    const lowerUrl = url.toLowerCase()
+    if (lowerUrl.endsWith('.doc') || lowerUrl.endsWith('.docx')) {
+      return `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`
+    }
+    return url
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -230,6 +238,7 @@ export default function StudentAssignmentsPage() {
             <div className="divide-y divide-gray-100">
               {assignments.map((item) => {
                 const finalUrl = getFileUrl(item.file_url)
+                const viewingUrl = getViewingUrl(item.file_url)
                 const fileName = item.file_url ? (item.file_url.split('/').pop()?.split('?')[0] || '') : ''
                 
                 const subFileUrls = item.submission?.file_url 
@@ -253,10 +262,10 @@ export default function StudentAssignmentsPage() {
                         {item.file_url && (
                           <div className="pt-1 flex flex-wrap gap-2">
                             <a
-                              href={finalUrl}
+                              href={viewingUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold transition shadow-sm border border-blue-100"
+                              className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold transition shadow-sm border border-blue-100 cursor-pointer"
                             >
                               <ExternalLink className="h-4 w-4" />
                               <span>Xem trực tiếp / Đọc đề ({fileName})</span>
@@ -266,7 +275,7 @@ export default function StudentAssignmentsPage() {
                               download
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-semibold transition shadow-sm border border-gray-200"
+                              className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-semibold transition shadow-sm border border-gray-200 cursor-pointer"
                             >
                               <Download className="h-4 w-4" />
                               <span>Tải xuống máy</span>
