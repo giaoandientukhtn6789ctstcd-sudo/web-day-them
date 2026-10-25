@@ -37,7 +37,7 @@ export default function AdminSubmissionsPage() {
     if (classData) {
       setClasses(classData)
       if (classData.length > 0 && selectedClassId === 'all') {
-        setSelectedClassId(classData[0].id) // Mặc định chọn lớp đầu tiên để hiện bảng thống kê sinh động
+        setSelectedClassId(classData[0].id)
       }
     }
 
@@ -88,6 +88,16 @@ export default function AdminSubmissionsPage() {
     const fileName = fileUrl.split('/').pop()?.split('?')[0] || ''
     const { data } = supabase.storage.from('assignments').getPublicUrl(fileName)
     return data.publicUrl
+  }
+
+  // Hàm tạo link xem trực tiếp thông minh cho giáo viên (Hỗ trợ Ảnh trực tiếp, PDF, Word qua Google Docs Viewer)
+  const getViewingUrl = (rawUrl: string) => {
+    const url = getFileUrl(rawUrl)
+    const lowerUrl = url.toLowerCase()
+    if (lowerUrl.endsWith('.pdf') || lowerUrl.endsWith('.doc') || lowerUrl.endsWith('.docx')) {
+      return `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`
+    }
+    return url
   }
 
   // Lọc bài nộp theo lớp và bài tập được chọn
@@ -143,7 +153,7 @@ export default function AdminSubmissionsPage() {
             <select
               value={selectedClassId}
               onChange={(e) => setSelectedClassId(e.target.value)}
-              className="px-3 py-2 border rounded-lg bg-white text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500"
+              className="px-3 py-2 border rounded-lg bg-white text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
             >
               <option value="all">Tất cả các lớp</option>
               {classes.map((cls) => (
@@ -160,7 +170,7 @@ export default function AdminSubmissionsPage() {
             <select
               value={selectedAssignmentId}
               onChange={(e) => setSelectedAssignmentId(e.target.value)}
-              className="px-3 py-2 border rounded-lg bg-white text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500 max-w-[250px]"
+              className="px-3 py-2 border rounded-lg bg-white text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500 max-w-[250px] cursor-pointer"
             >
               <option value="all">Tất cả bài tập</option>
               {assignments.map((assign) => (
@@ -227,7 +237,6 @@ export default function AdminSubmissionsPage() {
                   <tbody className="divide-y divide-gray-100 text-sm">
                     {studentsInCurrentClass.map((cs) => {
                       const studentInfo = allStudents.find(s => s.id === cs.student_id)
-                      // Các bài tập mà học sinh này đã nộp thuộc lớp này
                       const studentSubs = submissions.filter(sub => sub.student_id === cs.student_id && assignmentsForThisClass.some(a => a.id === sub.assignment_id))
                       const submittedCount = studentSubs.length
                       const unsubmittedCount = Math.max(0, assignmentsForThisClass.length - submittedCount)
@@ -288,7 +297,12 @@ export default function AdminSubmissionsPage() {
               {filteredSubmissions.map((sub) => {
                 const rawUrls = sub.file_url ? sub.file_url.split(',').map((u: string) => u.trim()).filter(Boolean) : []
                 const fileUrls = rawUrls.map((u: string) => getFileUrl(u))
-                const assignmentFileUrl = sub.assignments?.file_url ? getFileUrl(sub.assignments.file_url) : null
+                
+                // Xử lý link đề bài gốc cho giáo viên (Hỗ trợ ảnh trực tiếp hoặc Google Docs Viewer cho PDF/Word)
+                const rawAssignmentUrl = sub.assignments?.file_url
+                const assignmentViewingUrl = rawAssignmentUrl ? getViewingUrl(rawAssignmentUrl) : null
+                const assignmentDownloadUrl = rawAssignmentUrl ? getFileUrl(rawAssignmentUrl) : null
+                const isImageAssignment = rawAssignmentUrl && /\.(png|jpg|jpeg|webp)$/i.test(rawAssignmentUrl)
 
                 return (
                   <div key={sub.id} className="p-6 space-y-4 hover:bg-gray-50 transition">
@@ -316,8 +330,8 @@ export default function AdminSubmissionsPage() {
                       </div>
                     </div>
 
-                    {/* Hiển thị ảnh đề bài của giáo viên ngay trên hàng bài làm để dễ đối chiếu */}
-                    {assignmentFileUrl && (
+                    {/* Hiển thị đề bài gốc của giáo viên ngay trên hàng bài làm để dễ đối chiếu */}
+                    {rawAssignmentUrl && (
                       <div className="p-3 bg-indigo-50/60 rounded-lg border border-indigo-100 flex items-center justify-between text-xs">
                         <div className="flex items-center space-x-2">
                           <BookOpen className="h-4 w-4 text-indigo-600" />
@@ -326,16 +340,21 @@ export default function AdminSubmissionsPage() {
                         <div className="flex items-center space-x-2">
                           <button
                             onClick={() => {
-                              setPreviewImages([assignmentFileUrl])
-                              setCurrentImageIndex(0)
-                              setRotation(0)
+                              if (isImageAssignment) {
+                                setPreviewImages([assignmentDownloadUrl!])
+                                setCurrentImageIndex(0)
+                                setRotation(0)
+                              } else {
+                                window.open(assignmentViewingUrl!, '_blank')
+                              }
                             }}
-                            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold transition cursor-pointer shadow-xs"
+                            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold transition cursor-pointer shadow-xs inline-flex items-center space-x-1"
                           >
-                            Xem đề bài
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            <span>Xem đề bài</span>
                           </button>
                           <a
-                            href={assignmentFileUrl}
+                            href={assignmentDownloadUrl!}
                             download
                             target="_blank"
                             rel="noopener noreferrer"
