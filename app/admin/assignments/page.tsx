@@ -43,6 +43,58 @@ export default function AdminAssignmentsPage() {
     setLoading(false)
   }
 
+  // Hàm tự động nén ảnh đề bài trên trình duyệt giúp giảm dung lượng nhưng vẫn giữ nét chữ và hình học
+  const compressImage = (file: File): Promise<File> => {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith('image/')) {
+        resolve(file)
+        return
+      }
+
+      const reader = new FileReader()
+      reader.readAsDataURL(file)
+      reader.onload = (event) => {
+        const img = new Image()
+        img.src = event.target?.result as string
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          let width = img.width
+          let height = img.height
+
+          const MAX_DIMENSION = 1200
+          if (width > height && width > MAX_DIMENSION) {
+            height = Math.round((height * MAX_DIMENSION) / width)
+            width = MAX_DIMENSION
+          } else if (height > width && height > MAX_DIMENSION) {
+            width = Math.round((width * MAX_DIMENSION) / height)
+            height = MAX_DIMENSION
+          }
+
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          ctx?.drawImage(img, 0, 0, width, height)
+
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                const compressedFile = new File([blob], file.name, {
+                  type: 'image/jpeg',
+                  lastModified: Date.now(),
+                })
+                resolve(compressedFile)
+              } else {
+                resolve(file)
+              }
+            },
+            'image/jpeg',
+            0.8
+          )
+        }
+      }
+    })
+  }
+
   const handleCreateAssignment = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim()) {
@@ -54,21 +106,27 @@ export default function AdminAssignmentsPage() {
     let fileUrl = null
 
     if (file) {
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${Date.now()}.${fileExt}`
-      const filePath = `${fileName}`
+      try {
+        // Tự động nén ảnh trước khi upload lên Supabase
+        const processedFile = await compressImage(file)
+        const fileExt = processedFile.name.split('.').pop()
+        const fileName = `assignment_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`
+        const filePath = `${fileName}`
 
-      const { error: uploadError } = await supabase.storage
-        .from('assignments')
-        .upload(filePath, file)
-
-      if (uploadError) {
-        console.warn('Lỗi storage:', uploadError.message)
-      } else {
-        const { data: publicUrlData } = supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('assignments')
-          .getPublicUrl(filePath)
-        fileUrl = publicUrlData.publicUrl
+          .upload(filePath, processedFile, { upsert: true })
+
+        if (uploadError) {
+          console.warn('Lỗi storage:', uploadError.message)
+        } else {
+          const { data: publicUrlData } = supabase.storage
+            .from('assignments')
+            .getPublicUrl(filePath)
+          fileUrl = publicUrlData.publicUrl
+        }
+      } catch (err) {
+        console.error('Lỗi xử lý file:', err)
       }
     }
 
@@ -112,7 +170,7 @@ export default function AdminAssignmentsPage() {
     return data.publicUrl
   }
 
-  // Hỗ trợ xem trực tiếp file PDF và Word (qua Google Docs Viewer) mà không ép tải về
+  // Hỗ trợ xem trực tiếp ảnh, file PDF và Word (qua Google Docs Viewer) mà không ép tải về
   const getViewingUrl = (rawUrl: string) => {
     const url = getFileUrl(rawUrl)
     const lowerUrl = url.toLowerCase()
@@ -156,7 +214,7 @@ export default function AdminAssignmentsPage() {
             <div className="divide-y divide-gray-100">
               {assignments.map((item) => {
                 const viewingUrl = item.file_url ? getViewingUrl(item.file_url) : '#'
-                const isHttp = item.file_url && item.file_url.startsWith('http')
+                const fileName = item.file_url ? (item.file_url.split('/').pop()?.split('?')[0] || '') : ''
 
                 return (
                   <div key={item.id} className="p-6 flex justify-between items-start hover:bg-gray-50 transition">
@@ -172,19 +230,13 @@ export default function AdminAssignmentsPage() {
                       {item.file_url && (
                         <div className="pt-1 flex flex-wrap gap-2">
                           <a
-                            href={isHttp ? viewingUrl : '#'}
+                            href={viewingUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            onClick={(e) => {
-                              if (!isHttp) {
-                                e.preventDefault()
-                                alert('Tệp đính kèm: ' + item.file_url)
-                              }
-                            }}
                             className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold transition shadow-sm border border-blue-100 cursor-pointer"
                           >
                             <ExternalLink className="h-4 w-4" />
-                            <span>Xem trực tiếp đề: {item.file_url.split('/').pop()}</span>
+                            <span>Xem trực tiếp đề: {fileName}</span>
                           </a>
                         </div>
                       )}
@@ -259,7 +311,7 @@ export default function AdminAssignmentsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Đính kèm tệp (Ảnh, PDF, Word)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Đính kèm tệp (Ảnh đề bài sẽ tự động nén nhanh)</label>
                 <input
                   type="file"
                   accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
@@ -292,7 +344,7 @@ export default function AdminAssignmentsPage() {
                   disabled={uploading}
                   className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition cursor-pointer"
                 >
-                  {uploading ? 'Đang tải lên...' : 'Giao bài tập'}
+                  {uploading ? 'Đang nén & tải lên...' : 'Giao bài tập'}
                 </button>
               </div>
             </form>
